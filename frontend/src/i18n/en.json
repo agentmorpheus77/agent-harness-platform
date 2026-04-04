@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "Agent Harness",
+    "tagline": "Submit an Issue. Get a working feature."
+  },
+  "nav": {
+    "issues": "Issues",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "loginError": "Invalid credentials",
+    "registerError": "Registration failed"
+  },
+  "issues": {
+    "title": "Issues",
+    "noIssues": "No issues yet. Submit your first feature request!",
+    "status": {
+      "open": "Open",
+      "building": "Building",
+      "review": "Review",
+      "merged": "Merged",
+      "closed": "Closed"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "apiKeys": "API Keys",
+    "save": "Save",
+    "saved": "Saved!",
+    "keys": {
+      "openrouter_api_key": "OpenRouter API Key",
+      "github_token": "GitHub Token",
+      "railway_api_key": "Railway API Key",
+      "gemini_api_key": "Gemini API Key"
+    }
+  },
+  "repos": {
+    "selectRepo": "Select Repository",
+    "noRepos": "No repositories configured",
+    "addRepo": "Add Repository"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "en": "English",
+    "de": "Deutsch"
+  }
+}

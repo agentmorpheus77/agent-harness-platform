@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "Agent Harness",
+    "tagline": "Issue einreichen. Feature erhalten."
+  },
+  "nav": {
+    "issues": "Issues",
+    "settings": "Einstellungen",
+    "logout": "Abmelden"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "register": "Registrieren",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "noAccount": "Noch kein Konto?",
+    "hasAccount": "Bereits ein Konto?",
+    "loginError": "Ungültige Anmeldedaten",
+    "registerError": "Registrierung fehlgeschlagen"
+  },
+  "issues": {
+    "title": "Issues",
+    "noIssues": "Noch keine Issues. Reiche dein erstes Feature ein!",
+    "status": {
+      "open": "Offen",
+      "building": "In Arbeit",
+      "review": "Review",
+      "merged": "Gemergt",
+      "closed": "Geschlossen"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "apiKeys": "API-Schlüssel",
+    "save": "Speichern",
+    "saved": "Gespeichert!",
+    "keys": {
+      "openrouter_api_key": "OpenRouter API-Schlüssel",
+      "github_token": "GitHub Token",
+      "railway_api_key": "Railway API-Schlüssel",
+      "gemini_api_key": "Gemini API-Schlüssel"
+    }
+  },
+  "repos": {
+    "selectRepo": "Repository auswählen",
+    "noRepos": "Keine Repositories konfiguriert",
+    "addRepo": "Repository hinzufügen"
+  },
+  "theme": {
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System"
+  },
+  "language": {
+    "en": "English",
+    "de": "Deutsch"
+  }
+}
