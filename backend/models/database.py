@@ -69,3 +69,17 @@ class Setting(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     key: str  # e.g. "openrouter_api_key"
     value_encrypted: str
+
+
+def run_migrations():
+    """Run any pending schema migrations."""
+    from sqlalchemy import text, inspect
+    with engine.connect() as conn:
+        inspector = inspect(engine)
+        issue_cols = [c['name'] for c in inspector.get_columns('issue')] if inspector.has_table('issue') else []
+        if 'body' not in issue_cols:
+            conn.execute(text("ALTER TABLE issue ADD COLUMN body TEXT"))
+            conn.commit()
+        if 'title' not in issue_cols:
+            conn.execute(text("ALTER TABLE issue ADD COLUMN title TEXT"))
+            conn.commit()
