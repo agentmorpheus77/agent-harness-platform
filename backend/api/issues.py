@@ -245,3 +245,35 @@ def request_changes(
 
     result = store_feedback(issue_id, req.feedback)
     return FeedbackResponse(**result)
+
+@router.post("/{issue_id}/reset", response_model=IssueResponse)
+def reset_issue_status(
+    issue_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> IssueResponse:
+    """Reset a stuck issue back to open status."""
+    issue = session.get(Issue, issue_id)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    repo = session.get(Repo, issue.repo_id)
+    if not repo or repo.workspace_id not in [
+        w.id for w in session.exec(select(Workspace).where(Workspace.owner_id == user.id)).all()
+    ]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    issue.status = IssueStatus.open
+    session.add(issue)
+    session.commit()
+    session.refresh(issue)
+
+    return IssueResponse(
+        id=issue.id,
+        repo_id=issue.repo_id,
+        github_issue_number=issue.github_issue_number,
+        status=issue.status.value,
+        model_tier=issue.model_tier or "free",
+        title=issue.title or "",
+        created_at=issue.created_at.isoformat() if issue.created_at else "",
+    )
