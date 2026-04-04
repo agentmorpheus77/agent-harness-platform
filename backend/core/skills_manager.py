@@ -13,6 +13,8 @@ import yaml
 
 
 DEFAULT_SKILL_DIRS = [
+    # Bundled skills (checked into repo under /skills/)
+    "/app/skills",
     # Railway/production paths (cloned at startup)
     "/app/skills/cdb-skills/skills",
     "/app/skills/cdb-skills",
@@ -21,6 +23,8 @@ DEFAULT_SKILL_DIRS = [
     os.path.expanduser("~/clawd/skills"),
     os.path.expanduser("~/Projects/cdb-skills/skills"),
     os.path.expanduser("~/Projects/cdb-skills"),
+    # Bundled skills in project root (dev)
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "skills"),
 ]
 
 
