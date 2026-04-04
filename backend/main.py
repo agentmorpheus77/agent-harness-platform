@@ -77,3 +77,25 @@ def health():
     except Exception:
         pass  # Non-critical, don't break health check
     return {"status": "ok"}
+
+
+# Serve frontend static files (production)
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+_frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+if os.path.exists(_frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
+    
+    @app.get("/", include_in_schema=False)
+    @app.get("/{path:path}", include_in_schema=False)
+    async def serve_frontend(path: str = ""):
+        if path.startswith("api/") or path.startswith("docs") or path.startswith("openapi"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404)
+        index = os.path.join(_frontend_dist, "index.html")
+        if os.path.exists(index):
+            return FileResponse(index)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
