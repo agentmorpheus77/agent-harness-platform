@@ -407,6 +407,134 @@ OPENAI_WHISPER_KEY=...  # Optional: für Audio-Transkription
 
 ---
 
+## 👥 User-Management
+
+### Strategie: Agnostisch von Anfang an
+
+**Kein Supabase-Lock-in** — aber Supabase als optionaler Provider.
+
+```
+┌─────────────────────────────────────────────────────┐
+│           AUTH ABSTRACTION LAYER                    │
+│                                                     │
+│  Interface: IAuthProvider                           │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
+│  │ Built-in │  │ Supabase │  │ Future: OAuth/   │  │
+│  │ (SQLite) │  │(optional)│  │ LDAP / Keycloak  │  │
+│  └──────────┘  └──────────┘  └──────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+**v1:** Built-in Auth (FastAPI + SQLite + JWT) — kein externer Dienst nötig  
+**Optional:** Supabase per Config-Flag aktivierbar (wir haben den Account)  
+**Später:** OIDC/OAuth für Enterprise (GitHub SSO, Google, etc.)
+
+### Multi-User-Architektur (von Tag 1)
+
+Auch wenn v1 nur Single-User ist: DB-Schema ist bereits multi-user-fähig.
+
+```python
+# DB-Schema: users + workspaces (von Anfang an)
+User:      id, email, role (admin/user), api_keys_encrypted
+Workspace: id, owner_id, name, repos[], settings
+Issue:     id, workspace_id, submitted_by, assigned_agent
+```
+
+Kein Refactoring-Debt. Erster User ist einfach Admin.
+
+---
+
+## 🚀 Deploy-Abstraction (Provider-agnostisch)
+
+**Railway ist Default — aber austauschbar.**
+
+```
+┌─────────────────────────────────────────────────────┐
+│           DEPLOY ABSTRACTION LAYER                  │
+│                                                     │
+│  Interface: IDeployProvider                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
+│  │ Railway  │  │ Hetzner  │  │ Self-hosted       │  │
+│  │(default) │  │(Docker)  │  │ Worktree-Server  │  │
+│  └──────────┘  └──────────┘  └──────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+**Railway:** Fertig, automatisch, Ephemeral Envs — Best für Start  
+**Hetzner/Docker:** `docker-compose up` pro Branch, Port-Mapping — Self-hosted  
+**Eigener Worktree-Server:** Langfristig: eigene Mini-Cloud für Previews (volle Kontrolle)
+
+Konfiguration per `harness.yaml` im jeweiligen Repo:
+```yaml
+deploy:
+  provider: railway  # railway | docker | custom
+  seed_command: npm run seed
+  health_check: /health
+```
+
+---
+
+## 🤖 Merge-Agent + Komplexitäts-Schätzung
+
+### Komplexitäts-Schätzung beim Modell-Picker
+
+Vor der Modell-Auswahl analysiert der Agent kurz das Issue:
+
+```
+🔍 Komplexitäts-Analyse:
+• Betroffene Bereiche: src/components/ (Frontend)
+• Geschätzte Dateien: 2-3
+• Ähnliche Issues: #12, #18 (beide in <2h erledigt)
+• Empfehlung: Balanced (~$0.50)
+
+[Fast & Free $0] [● Balanced ~$0.50] [Premium ~$2]
+```
+
+User kann jederzeit übersteuern.
+
+### Merge-Agent (nach User-Approval ✅)
+
+Dedizierter Agent der nach ✅ übernimmt:
+
+```
+1. Konflikt-Check:
+   git fetch origin main
+   git merge-tree $(git merge-base HEAD main) HEAD main
+   → Konflikte? → Agent löst oder eskaliert an Admin
+
+2. Merge:
+   gh pr merge {number} --squash --delete-branch
+
+3. Cleanup:
+   git worktree remove ../worktrees/issue-{number}
+   railway env delete {preview-env-id}
+
+4. Notification:
+   "✅ Feature #42 wurde gemergt! Live in Produktion."
+   Issue → Closed
+```
+
+**Bei Parallel-Konflikten:** Queue-System — Merges sequentiell, nicht parallel.
+
+---
+
+## 📋 Status-Board (Paperclip-Vorbild)
+
+Kanban-ähnliche Übersicht aller laufenden Features:
+
+```
+┌──────────────┬──────────────┬──────────────┬──────────────┐
+│  📝 OPEN     │  🤖 BUILDING │  🔍 REVIEW   │  ✅ MERGED   │
+├──────────────┼──────────────┼──────────────┼──────────────┤
+│ #45 Export   │ #42 PDF-Btn  │ #40 Dark Mode│ #38 i18n     │
+│ User: Chris  │ Agent: aktiv │ Preview: ✅  │ Merged: 14:22│
+│ [Start]      │ [Live ●]     │ [Approve]    │              │
+│              │              │ [Feedback]   │              │
+└──────────────┴──────────────┴──────────────┴──────────────┘
+```
+
+---
+
 ## 🗺️ Rollout-Plan
 
 ### Phase 1 — Grundgerüst (Woche 1-2)
