@@ -24,8 +24,12 @@ from backend.models.database import Setting
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     SQLModel.metadata.create_all(engine)
-    from backend.models.database import run_migrations
-    run_migrations()
+    try:
+        from backend.models.database import run_migrations
+        run_migrations()
+    except Exception as e:
+        import logging
+        logging.warning(f"Migration skipped (DB not ready): {e}")
     yield
 
 
