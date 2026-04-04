@@ -31,7 +31,13 @@ Your job:
 3. Once you have enough info, generate a well-structured issue draft with:
    - A clear, concise title (in English)
    - A detailed body in markdown (in English) with sections: Description, Acceptance Criteria, Technical Notes
-4. Present the draft and ask if it looks good.
+4. Present the draft and ask if it looks good. Do NOT tell the user to copy/paste — the UI will automatically show a submit button when the draft is ready, and the user can submit it directly to GitHub with one click.
+
+When presenting the draft, always use this format:
+# Draft GitHub Issue
+**Title**: <issue title here>
+
+<issue body in markdown>
 
 If the feature involves UI changes, include "[UI]" at the start of your response when presenting the draft.
 
@@ -163,18 +169,47 @@ async def send_message(
     draft_body = None
     is_ui_feature = False
 
-    if "**Title:" in assistant_msg or "## Title" in assistant_msg or "# Title" in assistant_msg:
-        is_draft = True
-        # Try to extract title
-        for line in assistant_msg.split("\n"):
+    lines = assistant_msg.split("\n")
+    draft_header_idx = None
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Detect "# Draft GitHub Issue" header
+        if stripped.lower().startswith("# draft github issue"):
+            is_draft = True
+            draft_header_idx = i
+            continue
+        # Detect title patterns: **Title:** / **Title**: / Title: / ## Title: / # Title:
+        if stripped.startswith("**Title") and ":" in stripped:
+            is_draft = True
+            # Extract after the colon, strip markdown bold markers
+            draft_title = stripped.split(":", 1)[-1].strip().strip("*").strip()
+            break
+        if stripped.startswith("## Title") or stripped.startswith("# Title"):
+            is_draft = True
+            if ":" in stripped:
+                draft_title = stripped.split(":", 1)[-1].strip().strip("*").strip()
+            break
+        if stripped.startswith("Title:"):
+            is_draft = True
+            draft_title = stripped.split(":", 1)[-1].strip().strip("*").strip()
+            break
+
+    # If we found "# Draft GitHub Issue" but no title yet, look at following lines
+    if is_draft and not draft_title and draft_header_idx is not None:
+        for line in lines[draft_header_idx + 1 :]:
             stripped = line.strip()
-            if stripped.startswith("**Title:") or stripped.startswith("## Title") or stripped.startswith("# Title"):
+            if not stripped:
+                continue
+            if stripped.startswith("**Title") and ":" in stripped:
                 draft_title = stripped.split(":", 1)[-1].strip().strip("*").strip()
                 break
-            if stripped.startswith("Title:"):
-                draft_title = stripped.split(":", 1)[-1].strip().strip("*").strip()
+            # First non-empty line after header could be the title
+            if stripped.startswith("#"):
+                draft_title = stripped.lstrip("#").strip()
                 break
-        # Body is the full message as markdown
+
+    if is_draft:
         draft_body = assistant_msg
 
     if assistant_msg.startswith("[UI]"):

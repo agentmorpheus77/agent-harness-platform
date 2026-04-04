@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { X, Send, Bot, User as UserIcon, Loader2 } from 'lucide-react'
+import { X, Send, Bot, User as UserIcon, Loader2, CheckCircle2 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -183,7 +184,13 @@ export function IssueCreatorPage() {
                       : 'bg-muted'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
+                  {msg.role === 'user' ? (
+                    <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
+                  ) : (
+                    <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:bg-black/30 prose-pre:rounded prose-code:text-xs">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  )}
                   {msg.imageBase64 && (
                     <img
                       src={`data:image/png;base64,${msg.imageBase64}`}
@@ -217,10 +224,17 @@ export function IssueCreatorPage() {
             {draftTitle && (
               <div className="mb-3 flex items-center gap-2">
                 <Badge variant="default">{t('issueCreator.draftReady')}</Badge>
-                <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+                >
                   {submitting ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : null}
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                  )}
                   {t('issueCreator.submitToGithub')}
                 </Button>
               </div>
