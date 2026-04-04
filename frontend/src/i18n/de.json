@@ -51,6 +51,14 @@
     "dark": "Dunkel",
     "system": "System"
   },
+  "agent": {
+    "output": "Agent-Ausgabe",
+    "start": "Agent starten",
+    "running": "Läuft...",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "connecting": "Verbindung zum Agent..."
+  },
   "language": {
     "en": "English",
     "de": "Deutsch"

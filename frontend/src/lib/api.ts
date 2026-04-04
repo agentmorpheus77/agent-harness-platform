@@ -63,4 +63,21 @@ export const api = {
     request<{ id: number; repo_id: number; submitted_by: number; github_issue_number: number | null; status: string; model_tier: string; title: string }[]>(
       `/api/issues${repoId ? `?repo_id=${repoId}` : ''}`
     ),
+
+  startAgent: (issueId: number, modelTier = 'free', modelId?: string) =>
+    request<{ job_id: string; model: string; worktree_path: string }>('/api/agent/start', {
+      method: 'POST',
+      body: JSON.stringify({ issue_id: issueId, model_tier: modelTier, model_id: modelId }),
+    }),
+
+  getJobStatus: (jobId: string) =>
+    request<{ job_id: string; status: string; model: string; event_count: number }>(`/api/agent/${jobId}/status`),
+
+  estimateComplexity: (title: string, body = '') =>
+    request<{ tier: string; reason: string; estimated_files: number; score: number; categories: string[] }>(
+      '/api/agent/estimate-complexity',
+      { method: 'POST', body: JSON.stringify({ title, body }) }
+    ),
+
+  getModels: () => request<Record<string, { id: string; name: string; cost: string }[]>>('/api/agent/models'),
 }
