@@ -103,10 +103,11 @@ async def start_agent(
 
     # Get github token for cloning
     from backend.core.encryption import decrypt_value
+    from backend.models.database import Setting as _Setting
     gh_setting = session.exec(
-        __import__('sqlmodel').select(__import__('backend.models.database', fromlist=['Setting']).Setting)
-        .where(__import__('backend.models.database', fromlist=['Setting']).Setting.user_id == user.id)
-        .where(__import__('backend.models.database', fromlist=['Setting']).Setting.key == "github_token")
+        select(_Setting)
+        .where(_Setting.user_id == user.id)
+        .where(_Setting.key == "github_token")
     ).first()
     github_token = decrypt_value(gh_setting.value_encrypted) if gh_setting else ""
 
