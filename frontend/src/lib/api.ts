@@ -137,7 +137,7 @@ export const api = {
 
   // Skills
   getSkills: () =>
-    request<{ name: string; description: string; version: string; status: string; path: string; keywords: string[] }[]>(
+    request<{ name: string; description: string; version: string; status: string; path: string; keywords: string[]; required_keys: string[]; has_all_keys: boolean }[]>(
       '/api/skills'
     ),
 

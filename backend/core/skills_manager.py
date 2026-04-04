@@ -36,6 +36,37 @@ class SkillInfo:
     status: str = "available"  # 'loaded' | 'available' | 'outdated'
     path: str = ""
     keywords: list[str] = field(default_factory=list)
+    required_keys: list[str] = field(default_factory=list)
+    has_all_keys: bool = False
+
+
+_KNOWN_API_KEYS = [
+    "FIRECRAWL_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "WHISPER_API_KEY",
+    "GITHUB_TOKEN",
+    "RAILWAY_API_KEY",
+    "VERCEL_TOKEN",
+    "SENTRY_AUTH_TOKEN",
+]
+
+
+def parse_required_keys(skill_content: str) -> list[str]:
+    """Extract API key requirements from SKILL.md content.
+
+    Looks for known API key names (e.g. FIRECRAWL_API_KEY) and common patterns
+    like 'requires ... API key' in the skill content.
+    """
+    found: list[str] = []
+    upper_content = skill_content.upper()
+    for key in _KNOWN_API_KEYS:
+        if key in upper_content:
+            found.append(key)
+    return sorted(set(found))
 
 
 def parse_skill_frontmatter(content: str) -> dict:
@@ -110,6 +141,7 @@ def scan_skills(dirs: Optional[list[str]] = None) -> list[SkillInfo]:
             keywords.extend(name.lower().replace("-", " ").split())
 
             git_status = check_git_status(str(base_path))
+            required_keys = parse_required_keys(content)
 
             skills.append(
                 SkillInfo(
@@ -119,6 +151,7 @@ def scan_skills(dirs: Optional[list[str]] = None) -> list[SkillInfo]:
                     status=git_status,
                     path=str(skill_dir),
                     keywords=keywords,
+                    required_keys=required_keys,
                 )
             )
 

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from backend.core.deps import get_current_user, get_session
+from backend.core.encryption import decrypt_value
 from backend.core.skills_manager import (
     SkillInfo,
     get_relevant_skills,
@@ -16,7 +17,7 @@ from backend.core.skills_manager import (
     scan_skills,
     update_all_skills,
 )
-from backend.models.database import Repo, User, Workspace
+from backend.models.database import Repo, Setting, User, Workspace
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
@@ -28,6 +29,8 @@ class SkillResponse(BaseModel):
     status: str
     path: str
     keywords: list[str]
+    required_keys: list[str] = []
+    has_all_keys: bool = False
 
 
 class SkillContentResponse(BaseModel):
@@ -48,20 +51,42 @@ class RelevantResponse(BaseModel):
 
 
 @router.get("", response_model=list[SkillResponse])
-def list_skills(user: User = Depends(get_current_user)):
-    """List all available skills with status."""
+def list_skills(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """List all available skills with status and key readiness."""
     skills = scan_skills()
-    return [
-        SkillResponse(
-            name=s.name,
-            description=s.description,
-            version=s.version,
-            status=s.status,
-            path=s.path,
-            keywords=s.keywords,
+
+    # Load user's configured setting keys
+    settings = session.exec(select(Setting).where(Setting.user_id == user.id)).all()
+    configured_keys: set[str] = set()
+    for s in settings:
+        try:
+            val = decrypt_value(s.value_encrypted)
+            if val and val.strip():
+                configured_keys.add(s.key.upper())
+        except Exception:
+            pass
+
+    result = []
+    for s in skills:
+        has_all = len(s.required_keys) == 0 or all(
+            k.lower() in {ck.lower() for ck in configured_keys} for k in s.required_keys
         )
-        for s in skills
-    ]
+        result.append(
+            SkillResponse(
+                name=s.name,
+                description=s.description,
+                version=s.version,
+                status=s.status,
+                path=s.path,
+                keywords=s.keywords,
+                required_keys=s.required_keys,
+                has_all_keys=has_all,
+            )
+        )
+    return result
 
 
 @router.get("/{name}", response_model=SkillContentResponse)

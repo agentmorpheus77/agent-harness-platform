@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, Search, Package } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { RefreshCw, Search, Package, CheckCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,6 +16,8 @@ interface Skill {
   status: string
   path: string
   keywords: string[]
+  required_keys: string[]
+  has_all_keys: boolean
 }
 
 function statusColor(status: string) {
@@ -35,6 +38,52 @@ function shortenPath(path: string) {
     return '~' + rest
   }
   return path
+}
+
+function KeyBadge({ skill }: { skill: Skill }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [showTooltip, setShowTooltip] = useState(false)
+
+  if (skill.required_keys.length === 0 || skill.has_all_keys) {
+    return (
+      <Badge variant="outline" className="text-xs bg-green-500/20 text-green-400 border-green-500/30 gap-1">
+        <CheckCircle className="h-3 w-3" />
+        {t('skills.ready')}
+      </Badge>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <Badge
+        variant="outline"
+        className="text-xs bg-yellow-500/20 text-yellow-400 border-yellow-500/30 gap-1 cursor-pointer"
+        onClick={() => setShowTooltip(!showTooltip)}
+      >
+        <AlertTriangle className="h-3 w-3" />
+        {t('skills.needsKey')}
+      </Badge>
+      {showTooltip && (
+        <div className="absolute right-0 top-full mt-1 z-10 w-56 rounded-md border bg-popover p-3 text-popover-foreground shadow-md">
+          <p className="text-xs font-medium mb-1">{t('skills.missingKeys')}</p>
+          <ul className="text-xs text-muted-foreground mb-2 space-y-0.5">
+            {skill.required_keys.map((key) => (
+              <li key={key} className="font-mono">{key}</li>
+            ))}
+          </ul>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-xs"
+            onClick={() => navigate('/app/settings')}
+          >
+            {t('skills.configure')}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function SkillsPage() {
@@ -130,9 +179,12 @@ export function SkillsPage() {
                 <p className="text-sm text-muted-foreground line-clamp-2">
                   {skill.description || t('skills.noDescription')}
                 </p>
-                <p className="text-xs text-muted-foreground/70 truncate" title={skill.path}>
-                  {shortenPath(skill.path)}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground/70 truncate" title={skill.path}>
+                    {shortenPath(skill.path)}
+                  </p>
+                  <KeyBadge skill={skill} />
+                </div>
               </CardContent>
             </Card>
           ))}

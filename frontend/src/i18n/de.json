@@ -47,11 +47,20 @@
     "apiKeys": "API-Schlüssel",
     "save": "Speichern",
     "saved": "Gespeichert!",
+    "groups": {
+      "llmProviders": "LLM-Anbieter",
+      "tools": "Tools & Dienste"
+    },
     "keys": {
       "openrouter_api_key": "OpenRouter API-Schlüssel",
+      "anthropic_api_key": "Anthropic API-Schlüssel",
+      "openai_api_key": "OpenAI API-Schlüssel",
+      "gemini_api_key": "Gemini API-Schlüssel",
       "github_token": "GitHub Token",
       "railway_api_key": "Railway API-Schlüssel",
-      "gemini_api_key": "Gemini API-Schlüssel"
+      "firecrawl_api_key": "Firecrawl API-Schlüssel",
+      "elevenlabs_api_key": "ElevenLabs API-Schlüssel",
+      "whisper_api_key": "Whisper API-Schlüssel"
     }
   },
   "repos": {
@@ -85,7 +94,11 @@
       "loaded": "Aktiv",
       "available": "Verfügbar",
       "outdated": "Veraltet"
-    }
+    },
+    "ready": "Bereit",
+    "needsKey": "Key fehlt",
+    "missingKeys": "Fehlende Keys:",
+    "configure": "Konfigurieren"
   },
   "board": {
     "title": "Status-Board",
