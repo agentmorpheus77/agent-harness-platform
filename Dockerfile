@@ -25,6 +25,7 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 # Copy config files
 COPY harness.yaml .
 COPY start.sh .
+COPY skills/ ./skills/
 RUN chmod +x start.sh
 
 # Create data directory
