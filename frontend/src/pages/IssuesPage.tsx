@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useNavigate } from 'react-router-dom'
+import { Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,19 +18,20 @@ interface Issue {
   title: string
 }
 
-const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  open: 'outline',
-  building: 'default',
-  review: 'secondary',
-  merged: 'default',
-  closed: 'secondary',
+const statusColors: Record<string, string> = {
+  open: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  building: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  review: 'bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20',
+  merged: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/20',
+  closed: 'bg-gray-500/15 text-gray-700 dark:text-gray-400 border-gray-500/20',
 }
 
 export function IssuesPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { selectedRepoId } = useOutletContext<{ selectedRepoId: number | null }>()
   const [issues, setIssues] = useState<Issue[]>([])
-  const [activeJobs, setActiveJobs] = useState<Record<number, string>>({}) // issueId -> jobId
+  const [activeJobs, setActiveJobs] = useState<Record<number, string>>({})
 
   useEffect(() => {
     api.getIssues(selectedRepoId ?? undefined).then(setIssues).catch(() => {})
@@ -39,7 +41,6 @@ export function IssuesPage() {
     try {
       const result = await api.startAgent(issue.id, issue.model_tier || 'free')
       setActiveJobs((prev) => ({ ...prev, [issue.id]: result.job_id }))
-      // Update issue status locally
       setIssues((prev) =>
         prev.map((i) => (i.id === issue.id ? { ...i, status: 'building' } : i))
       )
@@ -49,13 +50,18 @@ export function IssuesPage() {
   }
 
   const handleAgentDone = () => {
-    // Refresh issues list
     api.getIssues(selectedRepoId ?? undefined).then(setIssues).catch(() => {})
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">{t('issues.title')}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">{t('issues.title')}</h1>
+        <Button onClick={() => navigate('/app/issues/new')}>
+          <Plus className="h-4 w-4 mr-1" />
+          {t('issues.newIssue')}
+        </Button>
+      </div>
       {issues.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
@@ -79,9 +85,9 @@ export function IssuesPage() {
                       <Badge variant="outline" className="text-xs">
                         {issue.model_tier}
                       </Badge>
-                      <Badge variant={statusVariants[issue.status] || 'outline'}>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusColors[issue.status] || statusColors.open}`}>
                         {t(`issues.status.${issue.status}`)}
-                      </Badge>
+                      </span>
                       {issue.status === 'open' && !activeJobs[issue.id] && (
                         <Button
                           size="sm"

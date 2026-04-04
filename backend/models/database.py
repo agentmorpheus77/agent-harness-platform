@@ -58,6 +58,7 @@ class Issue(SQLModel, table=True):
     status: IssueStatus = Field(default=IssueStatus.open)
     model_tier: str = Field(default="balanced")
     title: str = Field(default="")
+    body: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     repo: Optional[Repo] = Relationship(back_populates="issues")

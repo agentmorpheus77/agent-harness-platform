@@ -20,6 +20,7 @@
   },
   "issues": {
     "title": "Issues",
+    "newIssue": "Neues Issue",
     "noIssues": "Noch keine Issues. Reiche dein erstes Feature ein!",
     "status": {
       "open": "Offen",
@@ -28,6 +29,16 @@
       "merged": "Gemergt",
       "closed": "Geschlossen"
     }
+  },
+  "issueCreator": {
+    "title": "Neues Issue",
+    "selectRepo": "Bitte zuerst ein Repository auswählen",
+    "placeholder": "Tippe oder sprich deine Idee...",
+    "draftReady": "Entwurf fertig",
+    "submitToGithub": "An GitHub senden",
+    "draftPreview": "Issue-Entwurf",
+    "draftTitleLabel": "Titel",
+    "draftBodyLabel": "Inhalt"
   },
   "settings": {
     "title": "Einstellungen",

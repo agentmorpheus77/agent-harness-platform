@@ -80,4 +80,45 @@ export const api = {
     ),
 
   getModels: () => request<Record<string, { id: string; name: string; cost: string }[]>>('/api/agent/models'),
+
+  // Chat
+  startChat: (repoId: number) =>
+    request<{ session_id: string; message: string }>('/api/chat/start', {
+      method: 'POST',
+      body: JSON.stringify({ repo_id: repoId }),
+    }),
+
+  chatMessage: (sessionId: string, message: string) =>
+    request<{ message: string; is_draft: boolean; draft_title: string | null; draft_body: string | null; is_ui_feature: boolean }>(
+      `/api/chat/${sessionId}/message`,
+      { method: 'POST', body: JSON.stringify({ message }) }
+    ),
+
+  // Transcribe
+  transcribe: async (blob: Blob): Promise<{ text: string }> => {
+    const formData = new FormData()
+    formData.append('file', blob, 'recording.webm')
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) throw new Error('Transcription failed')
+    return res.json()
+  },
+
+  // Mockup
+  generateMockup: (title: string, description: string) =>
+    request<{ image_base64: string; model_used: string }>('/api/mockup', {
+      method: 'POST',
+      body: JSON.stringify({ title, description }),
+    }),
+
+  // Issue submission
+  submitIssue: (data: { repo_id: number; title: string; body: string; labels?: string[]; assignee?: string }) =>
+    request<{ id: number; github_issue_number: number; github_url: string; title: string }>(
+      '/api/issues/submit',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
 }

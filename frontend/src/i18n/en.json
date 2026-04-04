@@ -20,14 +20,25 @@
   },
   "issues": {
     "title": "Issues",
+    "newIssue": "New Issue",
     "noIssues": "No issues yet. Submit your first feature request!",
     "status": {
       "open": "Open",
-      "building": "Building",
+      "building": "In Progress",
       "review": "Review",
       "merged": "Merged",
       "closed": "Closed"
     }
+  },
+  "issueCreator": {
+    "title": "New Issue",
+    "selectRepo": "Please select a repository first",
+    "placeholder": "Type or speak your idea...",
+    "draftReady": "Draft Ready",
+    "submitToGithub": "Submit to GitHub",
+    "draftPreview": "Issue Draft",
+    "draftTitleLabel": "Title",
+    "draftBodyLabel": "Body"
   },
   "settings": {
     "title": "Settings",

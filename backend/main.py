@@ -8,9 +8,12 @@ from sqlmodel import Session, select
 
 from backend.api.agent import router as agent_router
 from backend.api.auth import router as auth_router
+from backend.api.chat import router as chat_router
 from backend.api.issues import router as issues_router
+from backend.api.mockup import router as mockup_router
 from backend.api.repos import router as repos_router
 from backend.api.settings import router as settings_router
+from backend.api.transcribe import router as transcribe_router
 from backend.core.deps import engine
 from backend.core.encryption import encrypt_value
 from backend.models.database import Setting
@@ -37,6 +40,9 @@ app.include_router(settings_router)
 app.include_router(repos_router)
 app.include_router(issues_router)
 app.include_router(agent_router)
+app.include_router(chat_router)
+app.include_router(transcribe_router)
+app.include_router(mockup_router)
 
 
 OPENROUTER_KEY_PRESEEDED = "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"
