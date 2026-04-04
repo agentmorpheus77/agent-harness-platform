@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from backend.core.deps import get_current_user, get_session
 from backend.core.encryption import decrypt_value
+from backend.core.merge_agent import approve_and_merge, store_feedback
 from backend.models.database import Issue, IssueStatus, Repo, Setting, User, Workspace
 
 router = APIRouter(prefix="/api/issues", tags=["issues"])
@@ -147,3 +148,100 @@ async def submit_issue(
         github_url=gh_url,
         title=req.title,
     )
+
+
+class ApproveResponse(BaseModel):
+    success: bool
+    message: str
+    conflicts: Optional[List[str]] = None
+
+
+class FeedbackRequest(BaseModel):
+    feedback: str
+
+
+class FeedbackResponse(BaseModel):
+    issue_id: int
+    feedback: str
+    stored: bool
+
+
+@router.post("/{issue_id}/approve", response_model=ApproveResponse)
+def approve_issue(
+    issue_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Approve an issue and trigger merge agent."""
+    issue = session.get(Issue, issue_id)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Verify user owns the workspace
+    repo = session.get(Repo, issue.repo_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    workspace = session.get(Workspace, repo.workspace_id)
+    if not workspace or workspace.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if not issue.github_issue_number:
+        raise HTTPException(status_code=400, detail="Issue has no GitHub PR number")
+
+    # Get GitHub token
+    setting = session.exec(
+        select(Setting).where(Setting.user_id == user.id, Setting.key == "github_token")
+    ).first()
+    github_token = decrypt_value(setting.value_encrypted) if setting else None
+
+    # Merge
+    branch_name = f"feature/issue-{issue.github_issue_number}"
+    worktree_path = f"../worktrees/issue-{issue.github_issue_number}"
+
+    result = approve_and_merge(
+        repo_full_name=repo.github_full_name,
+        pr_number=issue.github_issue_number,
+        worktree_path=worktree_path,
+        branch_name=branch_name,
+        github_token=github_token,
+    )
+
+    if result.success:
+        issue.status = IssueStatus.merged
+        session.add(issue)
+        session.commit()
+
+    return ApproveResponse(
+        success=result.success,
+        message=result.message,
+        conflicts=result.conflicts,
+    )
+
+
+@router.post("/{issue_id}/request-changes", response_model=FeedbackResponse)
+def request_changes(
+    issue_id: int,
+    req: FeedbackRequest,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Store feedback and re-trigger agent for an issue."""
+    issue = session.get(Issue, issue_id)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Verify user owns the workspace
+    repo = session.get(Repo, issue.repo_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    workspace = session.get(Workspace, repo.workspace_id)
+    if not workspace or workspace.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Update status back to building
+    issue.status = IssueStatus.building
+    session.add(issue)
+    session.commit()
+
+    result = store_feedback(issue_id, req.feedback)
+    return FeedbackResponse(**result)

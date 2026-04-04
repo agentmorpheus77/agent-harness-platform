@@ -121,4 +121,38 @@ export const api = {
       '/api/issues/submit',
       { method: 'POST', body: JSON.stringify(data) }
     ),
+
+  // Issue approval / feedback
+  approveIssue: (issueId: number) =>
+    request<{ success: boolean; message: string; conflicts: string[] | null }>(
+      `/api/issues/${issueId}/approve`,
+      { method: 'POST' }
+    ),
+
+  requestChanges: (issueId: number, feedback: string) =>
+    request<{ issue_id: number; feedback: string; stored: boolean }>(
+      `/api/issues/${issueId}/request-changes`,
+      { method: 'POST', body: JSON.stringify({ feedback }) }
+    ),
+
+  // Skills
+  getSkills: () =>
+    request<{ name: string; description: string; version: string; status: string; path: string; keywords: string[] }[]>(
+      '/api/skills'
+    ),
+
+  getSkillContent: (name: string) =>
+    request<{ name: string; content: string }>(`/api/skills/${name}`),
+
+  updateSkills: () =>
+    request<{ results: Record<string, unknown>[] }>('/api/skills/update', { method: 'POST' }),
+
+  getRelevantSkills: (text: string) =>
+    request<{ skills: string[] }>('/api/skills/relevant', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  getSkillsForRepo: (repoId: number) =>
+    request<{ skills: string[] }>(`/api/skills/for-repo/${repoId}`),
 }

@@ -40,6 +40,7 @@ export function IssueCreatorPage() {
   const [draftBody, setDraftBody] = useState<string | null>(null)
   const [mockupImage, setMockupImage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [loadedSkills, setLoadedSkills] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const selectedRepo = repos.find((r) => r.id === selectedRepoId)
@@ -47,9 +48,10 @@ export function IssueCreatorPage() {
   // Start chat session when repo is selected
   useEffect(() => {
     if (!selectedRepoId) return
-    api.startChat(selectedRepoId).then((res) => {
+    api.startChat(selectedRepoId).then((res: { session_id: string; message: string; loaded_skills?: string[] }) => {
       setSessionId(res.session_id)
       setMessages([{ role: 'assistant', content: res.message }])
+      if (res.loaded_skills) setLoadedSkills(res.loaded_skills)
     }).catch(() => {
       toast.error('Failed to start chat session')
     })
@@ -148,6 +150,11 @@ export function IssueCreatorPage() {
           {selectedRepo && (
             <Badge variant="outline">{selectedRepo.github_full_name}</Badge>
           )}
+          {loadedSkills.length > 0 && loadedSkills.map((skill) => (
+            <Badge key={skill} variant="secondary" className="text-xs">
+              {skill}
+            </Badge>
+          ))}
         </div>
         <Button variant="ghost" size="icon" onClick={() => navigate('/app/issues')}>
           <X className="h-4 w-4" />

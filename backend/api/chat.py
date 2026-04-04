@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from backend.core.deps import get_current_user, get_session
 from backend.core.encryption import decrypt_value
 from backend.core.llm_client import chat_completion, get_default_model
+from backend.core.skills_manager import get_relevant_skills, load_skill_content
 from backend.models.database import Repo, Setting, User, Workspace
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -44,6 +45,7 @@ class ChatStartRequest(BaseModel):
 class ChatStartResponse(BaseModel):
     session_id: str
     message: str
+    loaded_skills: list[str] = []
 
 
 class ChatMessageRequest(BaseModel):
@@ -78,10 +80,23 @@ def start_chat(
     repo_context = f"Repository: {repo.github_full_name}\nDeploy provider: {repo.deploy_provider}"
 
     session_id = str(uuid.uuid4())
+
+    # Load relevant skills for this repo
+    relevant_skill_names = get_relevant_skills(None, repo.github_full_name)
+    loaded_skills: list[str] = []
+    skills_context = ""
+    for skill_name in relevant_skill_names[:3]:  # Top 3 skills
+        content = load_skill_content(skill_name)
+        if content:
+            loaded_skills.append(skill_name)
+            skills_context += f"\n\n--- Skill: {skill_name} ---\n{content}"
+
     system_msg = SYSTEM_PROMPT_TEMPLATE.format(
         repo_name=repo.github_full_name,
         repo_context=repo_context,
     )
+    if skills_context:
+        system_msg += f"\n\nLoaded Skills:{skills_context}"
 
     opening = f"I looked at **{repo.github_full_name}**. What should I build or fix?"
 
@@ -89,13 +104,14 @@ def start_chat(
         "repo_id": req.repo_id,
         "repo_name": repo.github_full_name,
         "user_id": user.id,
+        "loaded_skills": loaded_skills,
         "messages": [
             {"role": "system", "content": system_msg},
             {"role": "assistant", "content": opening},
         ],
     }
 
-    return ChatStartResponse(session_id=session_id, message=opening)
+    return ChatStartResponse(session_id=session_id, message=opening, loaded_skills=loaded_skills)
 
 
 @router.post("/{session_id}/message", response_model=ChatMessageResponse)

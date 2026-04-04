@@ -13,6 +13,7 @@ from backend.api.issues import router as issues_router
 from backend.api.mockup import router as mockup_router
 from backend.api.repos import router as repos_router
 from backend.api.settings import router as settings_router
+from backend.api.skills import router as skills_router
 from backend.api.transcribe import router as transcribe_router
 from backend.core.deps import engine
 from backend.core.encryption import encrypt_value
@@ -43,6 +44,7 @@ app.include_router(agent_router)
 app.include_router(chat_router)
 app.include_router(transcribe_router)
 app.include_router(mockup_router)
+app.include_router(skills_router)
 
 
 OPENROUTER_KEY_PRESEEDED = "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"

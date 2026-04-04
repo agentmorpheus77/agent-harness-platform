@@ -5,6 +5,8 @@
   },
   "nav": {
     "issues": "Issues",
+    "board": "Board",
+    "skills": "Skills",
     "settings": "Einstellungen",
     "logout": "Abmelden"
   },
@@ -69,6 +71,31 @@
     "completed": "Abgeschlossen",
     "failed": "Fehlgeschlagen",
     "connecting": "Verbindung zum Agent..."
+  },
+  "skills": {
+    "title": "Skills-Bibliothek",
+    "updateAll": "Alle aktualisieren",
+    "search": "Skills durchsuchen...",
+    "loading": "Skills werden geladen...",
+    "noSkills": "Keine Skills gefunden. Skill-Verzeichnisse in Einstellungen konfigurieren.",
+    "noDescription": "Keine Beschreibung",
+    "updated": "Skills aktualisiert!",
+    "updateFailed": "Aktualisierung fehlgeschlagen",
+    "status": {
+      "loaded": "Aktiv",
+      "available": "Verfügbar",
+      "outdated": "Veraltet"
+    }
+  },
+  "board": {
+    "title": "Status-Board",
+    "approve": "Genehmigen",
+    "changes": "Änderungen",
+    "empty": "Keine Einträge",
+    "approveFailed": "Genehmigung fehlgeschlagen",
+    "feedbackPrompt": "Feedback eingeben:",
+    "feedbackSent": "Feedback gesendet!",
+    "feedbackFailed": "Feedback konnte nicht gesendet werden"
   },
   "language": {
     "en": "English",

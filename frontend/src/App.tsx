@@ -4,6 +4,8 @@ import { LoginPage } from '@/pages/LoginPage'
 import { IssuesPage } from '@/pages/IssuesPage'
 import { IssueCreatorPage } from '@/pages/IssueCreatorPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { SkillsPage } from '@/pages/SkillsPage'
+import { StatusBoardPage } from '@/pages/StatusBoardPage'
 import { AppLayout } from '@/components/AppLayout'
 
 export default function App() {
@@ -16,6 +18,8 @@ export default function App() {
           <Route index element={<Navigate to="issues" replace />} />
           <Route path="issues" element={<IssuesPage />} />
           <Route path="issues/new" element={<IssueCreatorPage />} />
+          <Route path="board" element={<StatusBoardPage />} />
+          <Route path="skills" element={<SkillsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/app" replace />} />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Bot, LayoutList, Settings, LogOut } from 'lucide-react'
+import { Bot, LayoutList, Kanban, Puzzle, Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -75,6 +75,24 @@ export function AppLayout() {
               >
                 <LayoutList className="mr-2 h-4 w-4" />
                 {t('nav.issues')}
+              </Button>
+            </Link>
+            <Link to="/app/board">
+              <Button
+                variant={location.pathname.includes('/board') ? 'secondary' : 'ghost'}
+                className="w-full justify-start"
+              >
+                <Kanban className="mr-2 h-4 w-4" />
+                {t('nav.board')}
+              </Button>
+            </Link>
+            <Link to="/app/skills">
+              <Button
+                variant={location.pathname.includes('/skills') ? 'secondary' : 'ghost'}
+                className="w-full justify-start"
+              >
+                <Puzzle className="mr-2 h-4 w-4" />
+                {t('nav.skills')}
               </Button>
             </Link>
             <Link to="/app/settings">
