@@ -8,7 +8,11 @@ from backend.core.config import DATABASE_URL
 from backend.core.security import decode_access_token
 from backend.models.database import User
 
-engine = create_engine(DATABASE_URL, echo=False)
+_engine_kwargs: dict = {}
+if DATABASE_URL.startswith("sqlite"):
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, echo=False, **_engine_kwargs)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 

@@ -9,8 +9,8 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install git for skills cloning at startup
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install git for skills cloning at startup, and libpq for PostgreSQL
+RUN apt-get update && apt-get install -y git libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY backend/requirements.txt .
@@ -28,10 +28,6 @@ COPY start.sh .
 COPY skills/ ./skills/
 RUN chmod +x start.sh
 
-# Create data directory
-RUN mkdir -p /data
-
-ENV DATABASE_URL=sqlite:////data/harness.db
 ENV PYTHONPATH=.
 
 EXPOSE 8000
