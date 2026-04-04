@@ -11,6 +11,12 @@ from backend.models.database import User
 _engine_kwargs: dict = {}
 if DATABASE_URL.startswith("sqlite"):
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL connection pool settings for Railway
+    _engine_kwargs["pool_pre_ping"] = True      # test connection before using
+    _engine_kwargs["pool_recycle"] = 300         # recycle connections every 5 min
+    _engine_kwargs["pool_size"] = 5
+    _engine_kwargs["max_overflow"] = 10
 
 engine = create_engine(DATABASE_URL, echo=False, **_engine_kwargs)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
