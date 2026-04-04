@@ -61,6 +61,20 @@
       "firecrawl_api_key": "Firecrawl API Key",
       "elevenlabs_api_key": "ElevenLabs API Key",
       "whisper_api_key": "Whisper API Key"
+    },
+    "domains": {
+      "tab": "Domains",
+      "title": "Custom Domains",
+      "serviceId": "Service ID",
+      "domainName": "Domain Name",
+      "add": "Add",
+      "remove": "Remove",
+      "empty": "No custom domains configured.",
+      "status": {
+        "active": "Active",
+        "pending": "Pending",
+        "error": "Error"
+      }
     }
   },
   "repos": {
