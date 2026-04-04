@@ -61,6 +61,20 @@
       "firecrawl_api_key": "Firecrawl API-Schlüssel",
       "elevenlabs_api_key": "ElevenLabs API-Schlüssel",
       "whisper_api_key": "Whisper API-Schlüssel"
+    },
+    "domains": {
+      "tab": "Domains",
+      "title": "Eigene Domains",
+      "serviceId": "Service-ID",
+      "domainName": "Domainname",
+      "add": "Hinzufügen",
+      "remove": "Entfernen",
+      "empty": "Keine eigenen Domains konfiguriert.",
+      "status": {
+        "active": "Aktiv",
+        "pending": "Ausstehend",
+        "error": "Fehler"
+      }
     }
   },
   "repos": {

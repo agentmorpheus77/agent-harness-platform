@@ -24,6 +24,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Request failed: ${res.status}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json()
 }
 
@@ -155,4 +156,19 @@ export const api = {
 
   getSkillsForRepo: (repoId: number) =>
     request<{ skills: string[] }>(`/api/skills/for-repo/${repoId}`),
+
+  // Domains
+  getDomains: () =>
+    request<{ id: number; workspace_id: number; service_id: string; domain_name: string; status: string; created_at: string }[]>(
+      '/api/domains'
+    ),
+
+  addDomain: (service_id: string, domain_name: string) =>
+    request<{ id: number; workspace_id: number; service_id: string; domain_name: string; status: string; created_at: string }>(
+      '/api/domains',
+      { method: 'POST', body: JSON.stringify({ service_id, domain_name }) }
+    ),
+
+  removeDomain: (domainId: number) =>
+    request<void>(`/api/domains/${domainId}`, { method: 'DELETE' }),
 }

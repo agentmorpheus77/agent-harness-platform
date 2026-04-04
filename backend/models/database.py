@@ -64,6 +64,21 @@ class Issue(SQLModel, table=True):
     repo: Optional[Repo] = Relationship(back_populates="issues")
 
 
+class DomainStatus(str, Enum):
+    pending = "pending"
+    active = "active"
+    error = "error"
+
+
+class Domain(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="workspace.id", index=True)
+    service_id: str  # e.g. Railway service ID
+    domain_name: str
+    status: DomainStatus = Field(default=DomainStatus.pending)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Setting(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
