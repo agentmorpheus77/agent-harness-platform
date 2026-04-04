@@ -28,7 +28,11 @@ COPY start.sh .
 COPY skills/ ./skills/
 RUN chmod +x start.sh
 
+# Create writable data directory for SQLite
+RUN mkdir -p /data && chmod 777 /data
+
 ENV PYTHONPATH=.
+ENV DATABASE_URL=sqlite:////data/harness.db
 
 EXPOSE 8000
 
