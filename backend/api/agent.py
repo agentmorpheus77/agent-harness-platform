@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import uuid
 from datetime import datetime, timezone
@@ -100,9 +101,18 @@ async def start_agent(
     session.add(issue)
     session.commit()
 
+    # Get github token for cloning
+    from backend.core.encryption import decrypt_value
+    gh_setting = session.exec(
+        __import__('sqlmodel').select(__import__('backend.models.database', fromlist=['Setting']).Setting)
+        .where(__import__('backend.models.database', fromlist=['Setting']).Setting.user_id == user.id)
+        .where(__import__('backend.models.database', fromlist=['Setting']).Setting.key == "github_token")
+    ).first()
+    github_token = decrypt_value(gh_setting.value_encrypted) if gh_setting else ""
+
     issue_dict = {
-        "title": issue.title,
-        "body": "",
+        "title": issue.title or f"Issue #{issue.id}",
+        "body": issue.body or "",
         "number": issue.github_issue_number or issue.id,
     }
 
@@ -117,6 +127,8 @@ async def start_agent(
         "repo_local_path": repo_local_path,
         "api_key": api_key,
         "issue_dict": issue_dict,
+        "github_full_name": repo.github_full_name,
+        "github_token": github_token,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -143,19 +155,54 @@ async def _run_agent_job(
         return
 
     try:
-        # Create worktree
+        # Step 1: Clone repo if not already present
+        job["status"] = "cloning"
+        github_full_name = job.get("github_full_name", "")
+        github_token = job.get("github_token", "")
+        
+        if not os.path.exists(os.path.join(repo_local_path, ".git")):
+            os.makedirs(repo_local_path, exist_ok=True)
+            job["events"].append({
+                "type": "thought",
+                "content": f"Cloning {github_full_name}...",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            clone_url = f"https://x-access-token:{github_token}@github.com/{github_full_name}.git"
+            clone_proc = await asyncio.create_subprocess_exec(
+                "git", "clone", clone_url, repo_local_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, clone_err = await clone_proc.communicate()
+            if clone_proc.returncode != 0:
+                # Try without token as fallback
+                clone_url_public = f"https://github.com/{github_full_name}.git"
+                clone_proc2 = await asyncio.create_subprocess_exec(
+                    "git", "clone", clone_url_public, repo_local_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, clone_err2 = await clone_proc2.communicate()
+                if clone_proc2.returncode != 0:
+                    raise RuntimeError(f"Clone failed: {clone_err2.decode()}")
+            job["events"].append({
+                "type": "tool_result",
+                "content": f"✅ Cloned {github_full_name}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # Step 2: Create worktree
         job["status"] = "creating_worktree"
         issue_number = issue_dict.get("number", 0)
         try:
             wt = await create_worktree(repo_local_path, issue_number)
             job["worktree_path"] = wt.worktree_path
         except Exception as e:
-            event = {
-                "type": "error",
-                "content": f"Failed to create worktree: {e}. Running in repo directly.",
+            job["events"].append({
+                "type": "thought",
+                "content": f"Using repo directly (worktree: {e})",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-            job["events"].append(event)
+            })
             # Fall back to using repo path directly
             job["worktree_path"] = repo_local_path
 
