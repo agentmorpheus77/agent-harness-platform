@@ -13,8 +13,13 @@ import yaml
 
 
 DEFAULT_SKILL_DIRS = [
+    # Railway/production paths (cloned at startup)
+    "/app/skills/cdb-skills/skills",
+    "/app/skills/cdb-skills",
+    # Local development paths
     os.path.expanduser("~/.agents/skills"),
     os.path.expanduser("~/clawd/skills"),
+    os.path.expanduser("~/Projects/cdb-skills/skills"),
     os.path.expanduser("~/Projects/cdb-skills"),
 ]
 
