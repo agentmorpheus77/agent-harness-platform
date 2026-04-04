@@ -1,0 +1,20 @@
+# harness.yaml - Agent Harness Platform configuration
+version: '1.0'
+
+deploy:
+  provider: docker
+  seed_command: ''
+  health_check: /health
+  health_timeout: 30
+
+skills:
+  extra_dirs: []
+  always_load: []
+
+agent:
+  max_iterations: 20
+  model_tier: free
+
+notifications:
+  on_complete: true
+  on_error: true

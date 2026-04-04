@@ -87,7 +87,7 @@ def test_chat_message_success(mock_llm, client, auth_headers, session):
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert "message" in data
+    assert data["message"]  # must be non-empty
     assert data["is_draft"] is False
 
 
@@ -169,6 +169,28 @@ def test_chat_message_no_api_key(mock_llm, client, auth_headers, session):
     )
     assert resp.status_code == 400
     assert "OpenRouter API key" in resp.json()["detail"]
+
+
+@patch("backend.api.chat.chat_completion", new_callable=AsyncMock)
+def test_chat_message_empty_content(mock_llm, client, auth_headers, session):
+    """LLM returning null/empty content should return 502, not 200 with empty message."""
+    repo = _seed_repo_and_key(session)
+
+    start_resp = client.post("/api/chat/start", json={"repo_id": repo.id}, headers=auth_headers)
+    session_id = start_resp.json()["session_id"]
+
+    # Model returns content: null (common with free models under load)
+    mock_llm.return_value = {
+        "choices": [{"message": {"role": "assistant", "content": None}}]
+    }
+
+    resp = client.post(
+        f"/api/chat/{session_id}/message",
+        json={"message": "hello"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 502
+    assert "empty content" in resp.json()["detail"].lower()
 
 
 @patch("backend.api.chat.chat_completion", new_callable=AsyncMock)

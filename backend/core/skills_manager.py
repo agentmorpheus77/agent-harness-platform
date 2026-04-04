@@ -151,21 +151,31 @@ def get_relevant_skills(
         if (repo / "Dockerfile").exists():
             search_terms.update(["docker", "container"])
 
-    relevant: list[tuple[int, str]] = []
+    # Score skills by semantic keyword overlap
+    relevant: list[tuple[float, str]] = []
     for skill in all_skills:
-        score = 0
+        score = 0.0
         skill_words = set(skill.keywords)
         skill_words.update(w.lower() for w in re.findall(r"[a-zA-Z]+", skill.description))
+
+        matched_terms = 0
         for term in search_terms:
             if term in skill_words:
-                score += 1
+                score += 1.0
+                matched_terms += 1
             if term in skill.name.lower():
-                score += 2
-        if score > 0:
+                score += 2.0
+                matched_terms += 1
+
+        # Require at least 2 keyword matches to filter out weak/coincidental hits
+        if matched_terms >= 2:
+            # Normalize by total search terms to favor precision over recall
+            if search_terms:
+                score *= matched_terms / len(search_terms)
             relevant.append((score, skill.name))
 
     relevant.sort(key=lambda x: x[0], reverse=True)
-    return [name for _, name in relevant]
+    return [name for _, name in relevant[:5]]
 
 
 def update_skill(skill_dir: str) -> dict:

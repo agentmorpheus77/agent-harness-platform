@@ -148,7 +148,13 @@ async def send_message(
     if not choices:
         raise HTTPException(status_code=502, detail="No response from LLM")
 
-    assistant_msg = choices[0].get("message", {}).get("content", "")
+    assistant_msg = choices[0].get("message", {}).get("content") or ""
+    if not assistant_msg.strip():
+        # Some free models return null/empty content — surface it clearly
+        raise HTTPException(
+            status_code=502,
+            detail="LLM returned empty content. The model may be overloaded — try again.",
+        )
     chat["messages"].append({"role": "assistant", "content": assistant_msg})
 
     # Detect if this is a draft (contains title-like pattern and body)

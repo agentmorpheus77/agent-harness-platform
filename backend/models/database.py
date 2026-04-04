@@ -74,8 +74,9 @@ class Setting(SQLModel, table=True):
 def run_migrations():
     """Run any pending schema migrations."""
     from sqlalchemy import text, inspect
-    with engine.connect() as conn:
-        inspector = inspect(engine)
+    from backend.core.deps import engine as _engine
+    with _engine.connect() as conn:
+        inspector = inspect(_engine)
         issue_cols = [c['name'] for c in inspector.get_columns('issue')] if inspector.has_table('issue') else []
         if 'body' not in issue_cols:
             conn.execute(text("ALTER TABLE issue ADD COLUMN body TEXT"))

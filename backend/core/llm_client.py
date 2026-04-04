@@ -11,8 +11,8 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 MODEL_TIERS = {
     "free": [
-        {"id": "qwen/qwen3.6-plus:free", "name": "Qwen 3.6 Plus (Free)", "cost": "$0"},
         {"id": "google/gemma-4-26b-a4b-it", "name": "Gemma 4 26B (Free)", "cost": "$0"},
+        {"id": "qwen/qwen3.6-plus:free", "name": "Qwen 3.6 Plus (Free)", "cost": "$0"},
     ],
     "balanced": [
         {"id": "qwen/qwen-2.5-coder-32b-instruct", "name": "Qwen 2.5 Coder 32B", "cost": "~$0.20/M"},
@@ -30,7 +30,7 @@ def get_models_for_tier(tier: str) -> list[dict[str, str]]:
 
 def get_default_model(tier: str) -> str:
     models = get_models_for_tier(tier)
-    return models[0]["id"] if models else "qwen/qwen3.6-plus:free"
+    return models[0]["id"] if models else "google/gemma-4-26b-a4b-it"
 
 
 async def stream_chat_completion(
