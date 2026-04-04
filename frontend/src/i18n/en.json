@@ -93,7 +93,9 @@
     "running": "Running...",
     "completed": "Completed",
     "failed": "Failed",
-    "connecting": "Connecting to agent..."
+    "connecting": "Connecting to agent...",
+    "viewOutput": "View Output",
+    "hideOutput": "Hide Output"
   },
   "skills": {
     "title": "Skills Library",

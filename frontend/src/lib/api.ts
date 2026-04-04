@@ -82,6 +82,9 @@ export const api = {
 
   getModels: () => request<Record<string, { id: string; name: string; cost: string }[]>>('/api/agent/models'),
 
+  resetIssue: (issueId: number) =>
+    request<{ status: string }>(`/api/issues/${issueId}/reset`, { method: 'POST' }),
+
   // Chat
   startChat: (repoId: number) =>
     request<{ session_id: string; message: string }>('/api/chat/start', {

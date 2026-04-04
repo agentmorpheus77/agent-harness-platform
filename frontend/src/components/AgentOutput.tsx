@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -12,6 +13,7 @@ interface AgentEvent {
 interface AgentOutputProps {
   jobId: string
   onDone?: () => void
+  defaultCollapsed?: boolean
 }
 
 const eventIcons: Record<string, string> = {
@@ -30,11 +32,12 @@ const eventColors: Record<string, string> = {
   done: 'text-emerald-400',
 }
 
-export function AgentOutput({ jobId, onDone }: AgentOutputProps) {
+export function AgentOutput({ jobId, onDone, defaultCollapsed = false }: AgentOutputProps) {
   const { t } = useTranslation()
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [connected, setConnected] = useState(false)
   const [finished, setFinished] = useState(false)
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -79,9 +82,12 @@ export function AgentOutput({ jobId, onDone }: AgentOutputProps) {
 
   return (
     <Card className="border-muted">
-      <CardHeader className="py-3">
+      <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setCollapsed((c) => !c)}>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">{t('agent.output')}</CardTitle>
+          <div className="flex items-center gap-2">
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <CardTitle className="text-base">{t('agent.output')}</CardTitle>
+          </div>
           <div className="flex items-center gap-2">
             {connected && !finished && (
               <Badge variant="default" className="animate-pulse">
@@ -93,27 +99,32 @@ export function AgentOutput({ jobId, onDone }: AgentOutputProps) {
                 {events.some(e => e.type === 'error') ? t('agent.failed') : t('agent.completed')}
               </Badge>
             )}
+            {events.length > 0 && (
+              <span className="text-xs text-muted-foreground">{events.length} events</span>
+            )}
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <div
-          ref={scrollRef}
-          className="bg-black/80 dark:bg-black/60 rounded-lg p-4 font-mono text-sm max-h-[500px] overflow-y-auto space-y-1"
-        >
-          {events.length === 0 && connected && (
-            <div className="text-muted-foreground animate-pulse">
-              {t('agent.connecting')}
-            </div>
-          )}
-          {events.map((event, i) => (
-            <div key={i} className={`flex gap-2 ${eventColors[event.type] || 'text-gray-400'}`}>
-              <span className="shrink-0">{eventIcons[event.type] || '>'}</span>
-              <span className="whitespace-pre-wrap break-all">{event.content}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
+      {!collapsed && (
+        <CardContent>
+          <div
+            ref={scrollRef}
+            className="bg-black/80 dark:bg-black/60 rounded-lg p-4 font-mono text-sm max-h-[500px] overflow-y-auto space-y-1"
+          >
+            {events.length === 0 && connected && (
+              <div className="text-muted-foreground animate-pulse">
+                {t('agent.connecting')}
+              </div>
+            )}
+            {events.map((event, i) => (
+              <div key={i} className={`flex gap-2 ${eventColors[event.type] || 'text-gray-400'}`}>
+                <span className="shrink-0">{eventIcons[event.type] || '>'}</span>
+                <span className="whitespace-pre-wrap break-all">{event.content}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      )}
     </Card>
   )
 }
