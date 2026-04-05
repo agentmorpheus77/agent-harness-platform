@@ -516,6 +516,7 @@ async def _preview_and_test(
                 branch_name=branch,
                 github_token=github_token,
                 railway_token=railway_token,
+                worktree_path=worktree_path,
             )
 
             if result.success and result.url:

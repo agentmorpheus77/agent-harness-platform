@@ -44,21 +44,24 @@ async def _graphql(token: str, query: str, variables: dict | None = None) -> dic
 
 
 async def get_project_for_repo(token: str, repo_full_name: str) -> Optional[dict]:
-    """Find the Railway project linked to a GitHub repo."""
+    """Find the Railway project/service linked to a GitHub repo."""
     query = """
     query {
         me {
-            projects {
-                edges {
-                    node {
-                        id
-                        name
-                        services {
-                            edges {
-                                node {
-                                    id
-                                    name
-                                    sourceRepo
+            workspaces {
+                id
+                name
+                projects {
+                    edges {
+                        node {
+                            id
+                            name
+                            services {
+                                edges {
+                                    node {
+                                        id
+                                        name
+                                    }
                                 }
                             }
                         }
@@ -69,14 +72,23 @@ async def get_project_for_repo(token: str, repo_full_name: str) -> Optional[dict
     }
     """
     data = await _graphql(token, query)
-    projects = data.get("me", {}).get("projects", {}).get("edges", [])
-    for edge in projects:
-        project = edge.get("node", {})
-        services = project.get("services", {}).get("edges", [])
-        for svc_edge in services:
-            svc = svc_edge.get("node", {})
-            if svc.get("sourceRepo") and repo_full_name.lower() in svc["sourceRepo"].lower():
-                return {"project_id": project["id"], "service_id": svc["id"]}
+    workspaces = data.get("me", {}).get("workspaces", [])
+    for ws in workspaces:
+        for pe in ws.get("projects", {}).get("edges", []):
+            project = pe.get("node", {})
+            # Match by project name (repo name without owner prefix)
+            repo_name = repo_full_name.split("/")[-1].lower()
+            if repo_name in project.get("name", "").lower():
+                services = project.get("services", {}).get("edges", [])
+                # Prefer service named "backend"
+                for svc_edge in services:
+                    svc = svc_edge.get("node", {})
+                    if svc.get("name", "").lower() == "backend":
+                        return {"project_id": project["id"], "service_id": svc["id"]}
+                # Fallback: first service
+                if services:
+                    svc = services[0]["node"]
+                    return {"project_id": project["id"], "service_id": svc["id"]}
     return None
 
 
@@ -85,9 +97,11 @@ async def create_preview_env(
     branch_name: str,
     github_token: str,
     railway_token: str,
+    worktree_path: str = "",
 ) -> RailwayDeployResult:
     """Create a Railway preview environment for a branch and wait for deployment.
 
+    Deploys via `railway up` CLI from the worktree — no GitHub App needed.
     Returns RailwayDeployResult with the public URL on success.
     """
     try:
@@ -102,7 +116,7 @@ async def create_preview_env(
         project_id = project_info["project_id"]
         service_id = project_info["service_id"]
 
-        # Step 2: Create a temporary environment (PR environment) for the branch
+        # Step 2: Create ephemeral environment for this branch
         create_env_query = """
         mutation($input: EnvironmentCreateInput!) {
             environmentCreate(input: $input) {
@@ -117,6 +131,7 @@ async def create_preview_env(
                 "projectId": project_id,
                 "name": env_name,
                 "ephemeral": True,
+                "sourceEnvironmentId": "4c3f68e9-7e34-4fad-a400-bd5e31b3ccbd",  # clone from production
             },
         })
         environment = env_data.get("environmentCreate", {})
@@ -124,22 +139,28 @@ async def create_preview_env(
         if not environment_id:
             return RailwayDeployResult(success=False, error="Failed to create Railway environment")
 
-        # Step 3: Trigger deployment on the new environment with the branch
-        deploy_query = """
-        mutation($input: DeploymentTriggerInput!) {
-            deploymentTriggerCreate(input: $input) {
-                id
-            }
+        # Step 3: Deploy via `railway up` CLI from worktree
+        # This sends code directly to Railway without GitHub App
+        deploy_dir = worktree_path or "."
+        env = {
+            **__import__("os").environ,
+            "RAILWAY_TOKEN": railway_token,
         }
-        """
-        deploy_data = await _graphql(railway_token, deploy_query, {
-            "input": {
-                "serviceId": service_id,
-                "environmentId": environment_id,
-                "branch": branch_name,
-            },
-        })
-        deployment_id = deploy_data.get("deploymentTriggerCreate", {}).get("id")
+        logger.info(f"Running railway up in {deploy_dir} for env {environment_id}")
+        proc = await asyncio.create_subprocess_shell(
+            f"railway up --service {service_id} --environment {environment_id} --detach",
+            cwd=deploy_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        logger.info(f"railway up stdout: {stdout.decode()[:300]}")
+        if proc.returncode != 0:
+            err = stderr.decode()[:300]
+            logger.warning(f"railway up failed: {err}")
+            # Continue anyway — deployment may still be queued
+        deployment_id = None
 
         # Step 4: Poll for deployment status
         status_query = """
