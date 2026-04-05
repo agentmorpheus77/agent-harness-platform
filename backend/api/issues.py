@@ -364,9 +364,12 @@ def reset_issue_status(
     return IssueResponse(
         id=issue.id,
         repo_id=issue.repo_id,
+        submitted_by=issue.submitted_by,
         github_issue_number=issue.github_issue_number,
+        pr_number=issue.pr_number,
+        branch_name=issue.branch_name,
         status=issue.status.value,
         model_tier=issue.model_tier or "free",
         title=issue.title or "",
-        created_at=issue.created_at.isoformat() if issue.created_at else "",
+        body=issue.body,
     )
