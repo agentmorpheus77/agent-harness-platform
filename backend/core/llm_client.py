@@ -63,6 +63,13 @@ MODEL_TIERS = {
             "context": 1048576,
             "note": "Fast, cheap, 1M context",
         },
+        {
+            "id": "openai/gpt-5-mini",
+            "name": "GPT-5 Mini",
+            "cost": "~$0.25/M in + $2.00/M out",
+            "context": 400000,
+            "note": "GPT-5 architecture, budget-friendly",
+        },
     ],
     "premium": [
         {
@@ -73,6 +80,20 @@ MODEL_TIERS = {
             "note": "Best overall coding quality",
         },
         {
+            "id": "openai/gpt-5",
+            "name": "GPT-5",
+            "cost": "~$1.25/M in + $10/M out",
+            "context": 400000,
+            "note": "OpenAI GPT-5, cheaper than GPT-4.1 on input",
+        },
+        {
+            "id": "openai/gpt-5.4",
+            "name": "GPT-5.4",
+            "cost": "~$2.50/M in + $15/M out",
+            "context": 1050000,
+            "note": "Latest OpenAI, 1M context",
+        },
+        {
             "id": "google/gemini-3.1-pro-preview",
             "name": "Gemini 3.1 Pro",
             "cost": "~$2/M in + $12/M out",
@@ -80,11 +101,11 @@ MODEL_TIERS = {
             "note": "Strong reasoning, 1M context",
         },
         {
-            "id": "openai/gpt-4.1",
-            "name": "GPT-4.1",
-            "cost": "~$2/M in + $8/M out",
-            "context": 1047576,
-            "note": "OpenAI flagship, excellent tools support",
+            "id": "openai/o4-mini",
+            "name": "o4-mini (Reasoning)",
+            "cost": "~$1.10/M in + $4.40/M out",
+            "context": 200000,
+            "note": "Best reasoning model, complex tasks",
         },
     ],
 }
