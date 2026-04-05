@@ -38,9 +38,16 @@
     "placeholder": "Tippe oder sprich deine Idee...",
     "draftReady": "Entwurf fertig",
     "submitToGithub": "An GitHub senden",
+    "editDraft": "Bearbeiten",
     "draftPreview": "Issue-Entwurf",
     "draftTitleLabel": "Titel",
-    "draftBodyLabel": "Inhalt"
+    "draftBodyLabel": "Inhalt",
+    "phase": {
+      "greeting": "Los geht's",
+      "clarification": "Anforderungen klären",
+      "draft": "Entwurf fertig",
+      "confirm": "Wird eingereicht"
+    }
   },
   "settings": {
     "title": "Einstellungen",
@@ -122,9 +129,12 @@
     "changes": "Änderungen",
     "empty": "Keine Einträge",
     "approveFailed": "Genehmigung fehlgeschlagen",
-    "feedbackPrompt": "Feedback eingeben:",
-    "feedbackSent": "Feedback gesendet!",
-    "feedbackFailed": "Feedback konnte nicht gesendet werden"
+    "feedbackPrompt": "Feedback für den Agent eingeben:",
+    "feedbackSent": "Feedback gesendet — Agent arbeitet daran!",
+    "feedbackFailed": "Feedback konnte nicht gesendet werden",
+    "previewUrl": "Vorschau",
+    "feedback": "Feedback",
+    "feedbackPlaceholder": "Beschreibe, was sich ändern soll..."
   },
   "language": {
     "en": "English",

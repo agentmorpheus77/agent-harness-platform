@@ -1,5 +1,8 @@
+import asyncio
 import os
-from typing import List, Optional
+import uuid
+from datetime import datetime, timezone
+from typing import Any, List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,7 +11,7 @@ from sqlmodel import Session, select
 
 from backend.core.deps import get_current_user, get_session
 from backend.core.encryption import decrypt_value
-from backend.core.merge_agent import approve_and_merge, store_feedback
+from backend.core.merge_agent import approve_and_merge
 from backend.models.database import Issue, IssueStatus, Repo, Setting, User, Workspace
 
 router = APIRouter(prefix="/api/issues", tags=["issues"])
@@ -21,6 +24,7 @@ class IssueResponse(BaseModel):
     github_issue_number: Optional[int]
     pr_number: Optional[int] = None
     branch_name: Optional[str] = None
+    preview_url: Optional[str] = None
     status: str
     model_tier: str
     title: str
@@ -72,6 +76,7 @@ def list_issues(
             github_issue_number=i.github_issue_number,
             pr_number=i.pr_number,
             branch_name=i.branch_name,
+            preview_url=i.preview_url,
             status=i.status.value,
             model_tier=i.model_tier,
             title=i.title,
@@ -168,6 +173,7 @@ class FeedbackRequest(BaseModel):
 class FeedbackResponse(BaseModel):
     issue_id: int
     feedback: str
+    job_id: str
     stored: bool
 
 
@@ -237,13 +243,13 @@ def approve_issue(
 
 
 @router.post("/{issue_id}/request-changes", response_model=FeedbackResponse)
-def request_changes(
+async def request_changes(
     issue_id: int,
     req: FeedbackRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Store feedback and re-trigger agent for an issue."""
+    """Store feedback and re-trigger agent to iterate on the same branch."""
     issue = session.get(Issue, issue_id)
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
@@ -256,13 +262,82 @@ def request_changes(
     if not workspace or workspace.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
+    # Get API keys
+    or_setting = session.exec(
+        select(Setting).where(Setting.user_id == user.id, Setting.key == "openrouter_api_key")
+    ).first()
+    if not or_setting:
+        raise HTTPException(status_code=400, detail="OpenRouter API key not configured")
+    api_key = decrypt_value(or_setting.value_encrypted)
+
+    gh_setting = session.exec(
+        select(Setting).where(Setting.user_id == user.id, Setting.key == "github_token")
+    ).first()
+    github_token = decrypt_value(gh_setting.value_encrypted) if gh_setting else ""
+
+    railway_setting = session.exec(
+        select(Setting).where(Setting.user_id == user.id, Setting.key == "railway_token")
+    ).first()
+    railway_token = decrypt_value(railway_setting.value_encrypted) if railway_setting else ""
+
+    # Resolve worktree path
+    repo_base = f"/tmp/agent-harness/repos/{repo.github_full_name.replace('/', '_')}"
+    if issue.worktree_path and os.path.exists(issue.worktree_path):
+        worktree_path = issue.worktree_path
+    else:
+        worktree_path = repo_base
+
     # Update status back to building
     issue.status = IssueStatus.building
     session.add(issue)
     session.commit()
 
-    result = store_feedback(issue_id, req.feedback)
-    return FeedbackResponse(**result)
+    # Determine model
+    from backend.core.llm_client import get_default_model
+    model = get_default_model(issue.model_tier or "free")
+
+    # Build issue dict with feedback context
+    issue_dict = {
+        "title": issue.title or f"Issue #{issue.id}",
+        "body": (
+            f"{issue.body or ''}\n\n"
+            f"---\n## User Feedback (iteration request)\n"
+            f"The previous implementation was reviewed. The user wants changes:\n\n"
+            f"{req.feedback}\n\n"
+            f"Please make the requested changes on this existing branch. "
+            f"The codebase already has the previous implementation — modify it accordingly."
+        ),
+        "number": issue.github_issue_number or issue.id,
+    }
+
+    # Create a new job and re-trigger agent
+    from backend.api.agent import _jobs, _run_agent_job
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {
+        "id": job_id,
+        "issue_id": issue.id,
+        "model": model,
+        "model_tier": issue.model_tier or "free",
+        "status": "starting",
+        "events": [],
+        "worktree_path": worktree_path,
+        "repo_local_path": repo_base,
+        "api_key": api_key,
+        "issue_dict": issue_dict,
+        "github_full_name": repo.github_full_name,
+        "github_token": github_token,
+        "railway_token": railway_token,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    asyncio.create_task(_run_agent_job(job_id, api_key, model, issue_dict, repo_base))
+
+    return FeedbackResponse(
+        issue_id=issue_id,
+        feedback=req.feedback,
+        job_id=job_id,
+        stored=True,
+    )
 
 @router.post("/{issue_id}/reset", response_model=IssueResponse)
 def reset_issue_status(

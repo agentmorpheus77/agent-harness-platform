@@ -19,7 +19,9 @@ from backend.core.complexity import estimate_complexity
 from backend.core.deps import get_current_user, get_session
 from backend.core.encryption import decrypt_value
 from backend.core.preview import PreviewServer, run_smoke_tests, start_preview, stop_preview
+from backend.core.railway_deploy import create_preview_env, delete_preview_env
 from backend.core.llm_client import MODEL_TIERS, get_default_model
+from backend.core.skills_manager import detect_repo_skills, load_inline_skill
 from backend.core.worktree import WorktreeInfo, cleanup_worktree, create_worktree
 from backend.models.database import Issue, IssueStatus, Repo, Setting, User
 
@@ -112,6 +114,14 @@ async def start_agent(
     ).first()
     github_token = decrypt_value(gh_setting.value_encrypted) if gh_setting else ""
 
+    # Railway token (optional — enables Railway preview deploy)
+    railway_setting = session.exec(
+        select(_Setting)
+        .where(_Setting.user_id == user.id)
+        .where(_Setting.key == "railway_token")
+    ).first()
+    railway_token = decrypt_value(railway_setting.value_encrypted) if railway_setting else ""
+
     issue_dict = {
         "title": issue.title or f"Issue #{issue.id}",
         "body": issue.body or "",
@@ -132,6 +142,7 @@ async def start_agent(
         "issue_dict": issue_dict,
         "github_full_name": repo.github_full_name,
         "github_token": github_token,
+        "railway_token": railway_token,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -231,6 +242,27 @@ async def _run_agent_job(
         worktree_path = job["worktree_path"]
         job["status"] = "running"
 
+        # ── Auto Skill Loading: detect repo skills and build enhanced system prompt ──
+        skills_prompt_section = ""
+        try:
+            file_tree = os.listdir(worktree_path)
+            detected_skills = detect_repo_skills(file_tree)
+            if detected_skills:
+                job["events"].append({
+                    "type": "thought",
+                    "content": f"📚 Loaded skills: {', '.join(detected_skills)}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                skill_sections = []
+                for skill_name in detected_skills:
+                    content = load_inline_skill(skill_name)
+                    if content:
+                        skill_sections.append(content)
+                if skill_sections:
+                    skills_prompt_section = "\n\n## Relevant Skills & Best Practices\n" + "\n\n".join(skill_sections)
+        except Exception:
+            pass  # Non-fatal: agent works fine without skills
+
         # Build model fallback list: primary model + tier fallbacks
         model_tier = job.get("model_tier", "free")
         from backend.core.llm_client import MODEL_TIERS as _MODEL_TIERS
@@ -258,7 +290,7 @@ async def _run_agent_job(
             got_error = False
             rate_limited = False
 
-            async for event in run_agent_loop(api_key, attempt_model, issue_dict, worktree_path):
+            async for event in run_agent_loop(api_key, attempt_model, issue_dict, worktree_path, skills_context=skills_prompt_section):
                 job["events"].append(event)
                 if event["type"] == "done":
                     job["status"] = "completed"
@@ -435,10 +467,16 @@ async def _preview_and_test(
     github_token: str,
     pr_number: int,
 ) -> None:
-    """Start a preview server for the worktree, run smoke tests, auto-merge on pass."""
-    issue_id = job.get("issue_id")
+    """Start a preview server for the worktree, run smoke tests, auto-merge on pass.
 
-    # ── 1. Start preview server ─────────────────────────────────────────────
+    If a Railway token is configured, deploy to Railway for a real public URL.
+    Otherwise, fall back to a local Vite dev server.
+    """
+    issue_id = job.get("issue_id")
+    railway_token = job.get("railway_token", "")
+    railway_env_id: str | None = None
+
+    # ── 1. Start preview (Railway or local) ─────────────────────────────────
     job["events"].append({
         "type": "thought",
         "content": "🚀 Starting preview server to test changes...",
@@ -446,18 +484,85 @@ async def _preview_and_test(
     })
 
     server: PreviewServer | None = None
+    preview_url: str | None = None
+
     try:
-        server = await asyncio.wait_for(
-            start_preview(worktree_path, timeout=90),
-            timeout=100,
-        )
-        preview_url = server.url
-        job["preview_url"] = preview_url
-        job["events"].append({
-            "type": "tool_result",
-            "content": f"🌐 Preview live: {preview_url}",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        if railway_token:
+            # Railway deploy path
+            branch_name = job.get("issue_dict", {}).get("number", "unknown")
+            branch = job.get("branch_name") or f"feature/issue-{branch_name}"
+            # Try to get actual branch from worktree
+            try:
+                bp = await asyncio.create_subprocess_shell(
+                    "git branch --show-current",
+                    cwd=worktree_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                bp_out, _ = await bp.communicate()
+                if bp_out.decode().strip():
+                    branch = bp_out.decode().strip()
+            except Exception:
+                pass
+
+            job["events"].append({
+                "type": "thought",
+                "content": f"🚂 Deploying to Railway (branch: {branch})...",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+            result = await create_preview_env(
+                repo_full_name=github_full_name,
+                branch_name=branch,
+                github_token=github_token,
+                railway_token=railway_token,
+            )
+
+            if result.success and result.url:
+                preview_url = result.url
+                railway_env_id = result.environment_id
+                job["preview_url"] = preview_url
+                job["events"].append({
+                    "type": "tool_result",
+                    "content": f"🌐 Railway preview live: {preview_url}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                job["events"].append({
+                    "type": "thought",
+                    "content": f"⚠️ Railway deploy failed: {result.error} — falling back to local preview",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                # Fall through to local preview
+
+        if not preview_url:
+            # Local Vite dev server fallback
+            server = await asyncio.wait_for(
+                start_preview(worktree_path, timeout=90),
+                timeout=100,
+            )
+            preview_url = server.url
+            job["preview_url"] = preview_url
+            job["events"].append({
+                "type": "tool_result",
+                "content": f"🌐 Preview live: {preview_url}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # Save preview_url to DB
+        if issue_id and preview_url:
+            try:
+                from sqlmodel import Session as _Session
+                from backend.core.deps import engine as _engine
+                from backend.models.database import Issue as _Issue
+                with _Session(_engine) as _db:
+                    _issue_db = _db.get(_Issue, issue_id)
+                    if _issue_db:
+                        _issue_db.preview_url = preview_url
+                        _db.add(_issue_db)
+                        _db.commit()
+            except Exception:
+                pass
 
         # ── 2. Smoke tests ───────────────────────────────────────────────────
         job["events"].append({
@@ -498,7 +603,7 @@ async def _preview_and_test(
             if merge_ok:
                 job["events"].append({
                     "type": "done",
-                    "content": f"🎉 Merged! PR #{pr_number} → main. Preview was: {preview_url}",
+                    "content": f"🎉 Merged! PR #{pr_number} → main. Preview: {preview_url}",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
                 job["status"] = "merged"
@@ -545,7 +650,7 @@ async def _preview_and_test(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
     finally:
-        # Always stop the preview server
+        # Always stop the preview server (local only)
         if server:
             await stop_preview(server)
             job["events"].append({
@@ -553,6 +658,12 @@ async def _preview_and_test(
                 "content": "🛑 Preview server stopped.",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
+        # Cleanup Railway preview env (non-blocking)
+        if railway_env_id and railway_token:
+            try:
+                await delete_preview_env(railway_token, railway_env_id)
+            except Exception:
+                pass
 
 
 @router.get("/{job_id}/stream")

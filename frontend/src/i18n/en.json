@@ -38,9 +38,16 @@
     "placeholder": "Type or speak your idea...",
     "draftReady": "Draft Ready",
     "submitToGithub": "Submit to GitHub",
+    "editDraft": "Edit",
     "draftPreview": "Issue Draft",
     "draftTitleLabel": "Title",
-    "draftBodyLabel": "Body"
+    "draftBodyLabel": "Body",
+    "phase": {
+      "greeting": "Getting started",
+      "clarification": "Clarifying requirements",
+      "draft": "Draft ready",
+      "confirm": "Submitting"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -122,9 +129,12 @@
     "changes": "Changes",
     "empty": "No items",
     "approveFailed": "Approval failed",
-    "feedbackPrompt": "Enter your feedback:",
-    "feedbackSent": "Feedback sent!",
-    "feedbackFailed": "Failed to send feedback"
+    "feedbackPrompt": "Enter your feedback for the agent:",
+    "feedbackSent": "Feedback sent — agent is iterating!",
+    "feedbackFailed": "Failed to send feedback",
+    "previewUrl": "Preview",
+    "feedback": "Feedback",
+    "feedbackPlaceholder": "Describe what should change..."
   },
   "language": {
     "en": "English",

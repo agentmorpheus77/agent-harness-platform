@@ -58,6 +58,7 @@ class Issue(SQLModel, table=True):
     pr_number: Optional[int] = None          # GitHub PR number (may differ from issue number)
     worktree_path: Optional[str] = None      # Absolute path to git worktree on disk
     branch_name: Optional[str] = None        # e.g. "feature/issue-5"
+    preview_url: Optional[str] = None        # Public preview URL (Railway or local)
     status: IssueStatus = Field(default=IssueStatus.open)
     model_tier: str = Field(default="balanced")
     title: str = Field(default="")
@@ -112,4 +113,7 @@ def run_migrations():
             conn.commit()
         if 'branch_name' not in issue_cols:
             conn.execute(text("ALTER TABLE issue ADD COLUMN branch_name TEXT"))
+            conn.commit()
+        if 'preview_url' not in issue_cols:
+            conn.execute(text("ALTER TABLE issue ADD COLUMN preview_url TEXT"))
             conn.commit()

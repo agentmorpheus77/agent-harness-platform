@@ -220,7 +220,122 @@ def get_relevant_skills(
     return [name for _, name in relevant[:5]]
 
 
-def update_skill(skill_dir: str) -> dict:
+# ── Auto Skill Loading: detect skills from repo file tree ────────────────────
+
+INLINE_SKILL_CONTENTS: dict[str, str] = {
+    "typescript": """## TypeScript/React Best Practices
+- Use typed props and interfaces for all components
+- Prefer functional components with hooks over class components
+- Use `const` assertions and discriminated unions for type safety
+- Avoid `any` — use `unknown` + type guards when types are uncertain
+- Use barrel exports (index.ts) for clean imports
+- Keep components small and focused; extract logic into custom hooks
+- Use React.memo() only when profiling shows unnecessary re-renders
+- Prefer named exports over default exports for better refactoring support""",
+
+    "python": """## Python Best Practices
+- Use type hints for all function signatures and return types
+- Prefer async/await for I/O-bound operations
+- Use dataclasses or Pydantic models for structured data
+- Follow PEP 8 naming: snake_case for functions/variables, PascalCase for classes
+- Use context managers (with statements) for resource management
+- Prefer pathlib.Path over os.path for file operations
+- Use logging module instead of print statements
+- Write docstrings for public functions and classes""",
+
+    "railway": """## Railway Deployment
+- Use nixpacks.toml for build configuration when possible
+- Set environment variables via Railway dashboard or CLI, never in code
+- Use railway.json for service configuration (start command, healthcheck)
+- Enable auto-deploys from the main branch
+- Use Railway volumes for persistent storage, not local filesystem
+- Configure healthcheck endpoints for zero-downtime deploys
+- Use Railway's built-in PostgreSQL/Redis instead of external providers""",
+
+    "testing": """## Testing Best Practices
+- Write tests that verify behavior, not implementation details
+- Use descriptive test names that explain the expected outcome
+- Follow Arrange-Act-Assert pattern for test structure
+- Mock external dependencies (APIs, databases) at the boundary
+- Aim for high coverage on business logic, lower on glue code
+- Use fixtures/factories for test data setup
+- Run tests in CI on every push; block merges on failure
+- Prefer integration tests over unit tests for API endpoints""",
+
+    "tailwind": """## Tailwind CSS Best Practices
+- Use utility classes directly in JSX; avoid @apply in most cases
+- Leverage Tailwind's design system (spacing, colors) for consistency
+- Use responsive prefixes (sm:, md:, lg:) for mobile-first design
+- Extract repeated patterns into components, not CSS classes
+- Use dark: prefix for dark mode support
+- Prefer gap utilities over margin for flex/grid layouts
+- Use cn() or clsx() for conditional class composition
+- Keep custom theme extensions minimal; use existing scale values""",
+
+    "i18n": """## Internationalization Best Practices
+- Extract ALL user-facing strings into translation files
+- Use namespaced keys (e.g., 'settings.title') for organization
+- Never concatenate translated strings; use interpolation
+- Support RTL layouts if targeting Arabic/Hebrew locales
+- Use ICU message format for plurals and gender
+- Keep translation keys in English as the source of truth
+- Test with longer translations (German is ~30% longer than English)
+- Lazy-load translations for non-default locales""",
+}
+
+
+def detect_repo_skills(file_tree: list[str]) -> list[str]:
+    """Detect relevant skills based on files present in a repository.
+
+    Args:
+        file_tree: List of file/directory names at the repo root level.
+
+    Returns:
+        List of skill names that should be loaded.
+    """
+    skills: list[str] = []
+    file_set = set(file_tree)
+    file_lower = {f.lower() for f in file_tree}
+
+    # TypeScript / React
+    if "package.json" in file_set or "tsconfig.json" in file_set:
+        skills.append("typescript")
+
+    # Railway
+    if "railway.toml" in file_set or "nixpacks.toml" in file_set or "railway.json" in file_set:
+        skills.append("railway")
+
+    # Python
+    if "requirements.txt" in file_set or "pyproject.toml" in file_set or "setup.py" in file_set:
+        skills.append("python")
+
+    # Testing — check for test directories or test file patterns
+    test_indicators = {"tests", "test", "__tests__", "spec", "pytest.ini", "jest.config.js", "vitest.config.ts"}
+    if test_indicators & file_lower:
+        skills.append("testing")
+    elif any(f for f in file_tree if ".test." in f or ".spec." in f or "_test." in f):
+        skills.append("testing")
+
+    # Tailwind
+    if any(f.startswith("tailwind.config") for f in file_tree):
+        skills.append("tailwind")
+    # Also check for tailwind in CSS files — but we can only check filenames here
+    # The caller can do deeper analysis if needed
+
+    # i18n
+    i18n_indicators = {"i18n", "locales", "translations", "lang"}
+    if i18n_indicators & file_lower:
+        skills.append("i18n")
+
+    return skills
+
+
+def load_inline_skill(skill_name: str) -> str | None:
+    """Load inline skill content by name."""
+    return INLINE_SKILL_CONTENTS.get(skill_name)
+
+
+
     """Git pull on a skill directory. Returns status dict."""
     try:
         result = subprocess.run(

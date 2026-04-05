@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { X, Send, Bot, User as UserIcon, Loader2, CheckCircle2 } from 'lucide-react'
+import { X, Send, Bot, User as UserIcon, Loader2, CheckCircle2, Pencil } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { VoiceRecorder } from '@/components/VoiceRecorder'
 import { api } from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -22,6 +23,16 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   imageBase64?: string
+}
+
+type ChatPhase = 'greeting' | 'clarification' | 'draft' | 'confirm' | 'chat'
+
+const phaseColors: Record<ChatPhase, string> = {
+  greeting: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  clarification: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  draft: 'bg-green-500/15 text-green-400 border-green-500/30',
+  confirm: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  chat: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
 }
 
 export function IssueCreatorPage() {
@@ -42,6 +53,7 @@ export function IssueCreatorPage() {
   const [mockupImage, setMockupImage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [loadedSkills, setLoadedSkills] = useState<string[]>([])
+  const [phase, setPhase] = useState<ChatPhase>('greeting')
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const selectedRepo = repos.find((r) => r.id === selectedRepoId)
@@ -76,13 +88,17 @@ export function IssueCreatorPage() {
       const assistantMsg: ChatMessage = { role: 'assistant', content: res.message }
       setMessages((prev) => [...prev, assistantMsg])
 
+      // Update phase
+      if (res.phase) {
+        setPhase(res.phase as ChatPhase)
+      }
+
       if (res.is_draft && res.draft_title) {
         setDraftTitle(res.draft_title)
         setDraftBody(res.draft_body || res.message)
       }
 
       if (res.is_ui_feature) {
-        // Auto-generate mockup for UI features
         if (res.draft_title) {
           generateMockup(res.draft_title, res.draft_body || res.message)
         }
@@ -130,6 +146,11 @@ export function IssueCreatorPage() {
     }
   }
 
+  const handleEditDraft = () => {
+    // Tell the agent to revise the draft
+    sendMessage('Please revise the draft based on my feedback.')
+  }
+
   const handleTranscription = (text: string) => {
     setInput((prev) => (prev ? prev + ' ' + text : text))
   }
@@ -156,6 +177,10 @@ export function IssueCreatorPage() {
               {skill}
             </Badge>
           ))}
+          {/* Phase indicator */}
+          <Badge variant="outline" className={`text-xs ${phaseColors[phase] || ''}`}>
+            {t(`issueCreator.phase.${phase}`, phase)}
+          </Badge>
         </div>
         <Button variant="ghost" size="icon" onClick={() => navigate('/app/issues')}>
           <X className="h-4 w-4" />
@@ -219,9 +244,46 @@ export function IssueCreatorPage() {
             <div ref={chatEndRef} />
           </div>
 
+          {/* Draft card inline when phase is draft */}
+          {phase === 'draft' && draftTitle && (
+            <div className="px-6 pb-2">
+              <Card className="border-green-500/30 bg-green-500/5">
+                <CardHeader className="py-3 px-4">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>{draftTitle}</span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={handleEditDraft}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        {t('issueCreator.editDraft')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className="h-7 bg-green-600 hover:bg-green-700 text-white text-xs"
+                      >
+                        {submitting ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                        )}
+                        {t('issueCreator.submitToGithub')}
+                      </Button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            </div>
+          )}
+
           {/* Input area */}
           <div className="border-t bg-card p-4">
-            {draftTitle && (
+            {draftTitle && phase !== 'draft' && (
               <div className="mb-3 flex items-center gap-2">
                 <Badge variant="default">{t('issueCreator.draftReady')}</Badge>
                 <Button

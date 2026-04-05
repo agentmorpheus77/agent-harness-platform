@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, XCircle, Bot } from 'lucide-react'
+import { CheckCircle2, XCircle, Bot, ExternalLink, MessageSquare, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { AgentOutput } from '@/components/AgentOutput'
 import { api } from '@/lib/api'
 import toast from 'react-hot-toast'
 
@@ -13,6 +15,8 @@ interface Issue {
   repo_id: number
   submitted_by: number
   github_issue_number: number | null
+  pr_number: number | null
+  preview_url: string | null
   status: string
   model_tier: string
   title: string
@@ -59,6 +63,10 @@ export function StatusBoardPage() {
   const { t } = useTranslation()
   const { selectedRepoId } = useOutletContext<OutletCtx>()
   const [issues, setIssues] = useState<Issue[]>([])
+  const [feedbackOpen, setFeedbackOpen] = useState<Record<number, boolean>>({})
+  const [feedbackText, setFeedbackText] = useState<Record<number, string>>({})
+  const [feedbackLoading, setFeedbackLoading] = useState<Record<number, boolean>>({})
+  const [activeJobs, setActiveJobs] = useState<Record<number, string>>({})
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function loadIssues() {
@@ -72,7 +80,6 @@ export function StatusBoardPage() {
 
   useEffect(() => {
     loadIssues()
-    // Poll every 5 seconds
     intervalRef.current = setInterval(loadIssues, 5000)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
@@ -94,15 +101,34 @@ export function StatusBoardPage() {
   }
 
   async function handleRequestChanges(issueId: number) {
-    const feedback = prompt(t('board.feedbackPrompt'))
-    if (!feedback) return
+    const feedback = feedbackText[issueId]
+    if (!feedback?.trim()) return
+
+    setFeedbackLoading((prev) => ({ ...prev, [issueId]: true }))
     try {
-      await api.requestChanges(issueId, feedback)
+      const result = await api.requestChanges(issueId, feedback)
+      // Store the new job_id so we can show the agent output
+      if (result.job_id) {
+        setActiveJobs((prev) => ({ ...prev, [issueId]: result.job_id }))
+      }
       toast.success(t('board.feedbackSent'))
+      setFeedbackOpen((prev) => ({ ...prev, [issueId]: false }))
+      setFeedbackText((prev) => ({ ...prev, [issueId]: '' }))
       loadIssues()
     } catch {
       toast.error(t('board.feedbackFailed'))
+    } finally {
+      setFeedbackLoading((prev) => ({ ...prev, [issueId]: false }))
     }
+  }
+
+  function handleAgentDone(issueId: number) {
+    setActiveJobs((prev) => {
+      const next = { ...prev }
+      delete next[issueId]
+      return next
+    })
+    loadIssues()
   }
 
   const grouped = Object.fromEntries(COLUMNS.map((c) => [c, issues.filter((i) => i.status === c)]))
@@ -125,56 +151,106 @@ export function StatusBoardPage() {
 
             <div className="space-y-2">
               {grouped[col]?.map((issue) => (
-                <Card key={issue.id} className="shadow-sm">
-                  <CardHeader className="p-3 pb-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-sm font-medium leading-tight">
-                        {issue.title}
-                      </CardTitle>
-                      {issue.github_issue_number && (
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          #{issue.github_issue_number}
-                        </span>
+                <div key={issue.id} className="space-y-2">
+                  <Card className="shadow-sm">
+                    <CardHeader className="p-3 pb-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-sm font-medium leading-tight">
+                          {issue.title}
+                        </CardTitle>
+                        {issue.github_issue_number && (
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            #{issue.github_issue_number}
+                          </span>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-1 space-y-2">
+                      <Badge variant="outline" className={`text-xs ${tierBadge(issue.model_tier)}`}>
+                        {issue.model_tier}
+                      </Badge>
+
+                      {issue.status === 'building' && (
+                        <div className="flex items-center gap-1 text-xs text-yellow-400">
+                          <Bot className="h-3 w-3 animate-pulse" />
+                          <span>{t('agent.running')}</span>
+                        </div>
                       )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-3 pt-1 space-y-2">
-                    <Badge variant="outline" className={`text-xs ${tierBadge(issue.model_tier)}`}>
-                      {issue.model_tier}
-                    </Badge>
 
-                    {issue.status === 'building' && (
-                      <div className="flex items-center gap-1 text-xs text-yellow-400">
-                        <Bot className="h-3 w-3 animate-pulse" />
-                        <span>{t('agent.running')}</span>
-                      </div>
-                    )}
+                      {/* Preview URL link */}
+                      {issue.preview_url && (
+                        <a
+                          href={issue.preview_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {t('board.previewUrl')}
+                        </a>
+                      )}
 
-                    {/* Action buttons for review state */}
-                    {issue.status === 'review' && (
-                      <div className="flex gap-1.5 pt-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs text-green-400 hover:text-green-300"
-                          onClick={() => handleApprove(issue.id)}
-                        >
-                          <CheckCircle2 className="mr-1 h-3 w-3" />
-                          {t('board.approve')}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs text-red-400 hover:text-red-300"
-                          onClick={() => handleRequestChanges(issue.id)}
-                        >
-                          <XCircle className="mr-1 h-3 w-3" />
-                          {t('board.changes')}
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      {/* Action buttons for review state */}
+                      {issue.status === 'review' && (
+                        <div className="space-y-2">
+                          <div className="flex gap-1.5 pt-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-green-400 hover:text-green-300"
+                              onClick={() => handleApprove(issue.id)}
+                            >
+                              <CheckCircle2 className="mr-1 h-3 w-3" />
+                              {t('board.approve')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-red-400 hover:text-red-300"
+                              onClick={() => setFeedbackOpen((prev) => ({ ...prev, [issue.id]: !prev[issue.id] }))}
+                            >
+                              <MessageSquare className="mr-1 h-3 w-3" />
+                              {t('board.feedback')}
+                            </Button>
+                          </div>
+
+                          {/* Feedback textarea */}
+                          {feedbackOpen[issue.id] && (
+                            <div className="space-y-1.5">
+                              <Textarea
+                                value={feedbackText[issue.id] || ''}
+                                onChange={(e) => setFeedbackText((prev) => ({ ...prev, [issue.id]: e.target.value }))}
+                                placeholder={t('board.feedbackPlaceholder')}
+                                className="text-xs min-h-[60px] resize-none"
+                              />
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs w-full"
+                                onClick={() => handleRequestChanges(issue.id)}
+                                disabled={!feedbackText[issue.id]?.trim() || feedbackLoading[issue.id]}
+                              >
+                                {feedbackLoading[issue.id] ? (
+                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                ) : (
+                                  <XCircle className="mr-1 h-3 w-3" />
+                                )}
+                                {t('board.changes')}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Agent output for feedback jobs */}
+                  {activeJobs[issue.id] && (
+                    <AgentOutput
+                      jobId={activeJobs[issue.id]}
+                      onDone={() => handleAgentDone(issue.id)}
+                    />
+                  )}
+                </div>
               ))}
 
               {(!grouped[col] || grouped[col].length === 0) && (

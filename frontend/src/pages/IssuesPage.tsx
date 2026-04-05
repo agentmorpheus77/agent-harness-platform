@@ -13,6 +13,7 @@ interface Issue {
   repo_id: number
   submitted_by: number
   github_issue_number: number | null
+  preview_url: string | null
   status: string
   model_tier: string
   title: string

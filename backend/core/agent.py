@@ -245,6 +245,7 @@ async def run_agent_loop(
     issue: dict[str, Any],
     worktree_path: str,
     system_prompt: str | None = None,
+    skills_context: str | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Run the agentic coding loop. Yields SSE-style event dicts.
 
@@ -279,6 +280,10 @@ async def run_agent_loop(
 ✅ Written at least one file (write_file)
 ✅ Committed the changes (git_commit)
 ✅ Called done() with a summary"""
+
+    # Append auto-loaded skills context to system prompt
+    if skills_context:
+        system_prompt += "\n" + skills_context
 
     issue_context = (
         f"## Issue to implement\n"

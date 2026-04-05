@@ -61,7 +61,7 @@ export const api = {
     }),
 
   getIssues: (repoId?: number) =>
-    request<{ id: number; repo_id: number; submitted_by: number; github_issue_number: number | null; status: string; model_tier: string; title: string }[]>(
+    request<{ id: number; repo_id: number; submitted_by: number; github_issue_number: number | null; pr_number: number | null; branch_name: string | null; preview_url: string | null; status: string; model_tier: string; title: string; body: string | null }[]>(
       `/api/issues${repoId ? `?repo_id=${repoId}` : ''}`
     ),
 
@@ -93,7 +93,7 @@ export const api = {
     }),
 
   chatMessage: (sessionId: string, message: string) =>
-    request<{ message: string; is_draft: boolean; draft_title: string | null; draft_body: string | null; is_ui_feature: boolean }>(
+    request<{ message: string; phase: string; is_draft: boolean; draft_title: string | null; draft_body: string | null; is_ui_feature: boolean }>(
       `/api/chat/${sessionId}/message`,
       { method: 'POST', body: JSON.stringify({ message }) }
     ),
@@ -134,7 +134,7 @@ export const api = {
     ),
 
   requestChanges: (issueId: number, feedback: string) =>
-    request<{ issue_id: number; feedback: string; stored: boolean }>(
+    request<{ issue_id: number; feedback: string; job_id: string; stored: boolean }>(
       `/api/issues/${issueId}/request-changes`,
       { method: 'POST', body: JSON.stringify({ feedback }) }
     ),
