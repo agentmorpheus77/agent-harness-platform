@@ -196,17 +196,36 @@ async def _run_agent_job(
         # Step 2: Create worktree
         job["status"] = "creating_worktree"
         issue_number = issue_dict.get("number", 0)
+        wt_branch = f"feature/issue-{issue_number}"
         try:
             wt = await create_worktree(repo_local_path, issue_number)
             job["worktree_path"] = wt.worktree_path
+            wt_branch = wt.branch_name if hasattr(wt, "branch_name") else wt_branch
         except Exception as e:
             job["events"].append({
                 "type": "thought",
-                "content": f"Using repo directly (worktree: {e})",
+                "content": f"Using repo directly (worktree creation failed: {e})",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
             # Fall back to using repo path directly
             job["worktree_path"] = repo_local_path
+
+        # Persist worktree path + branch to DB so approve can find it
+        from backend.core.deps import get_session as _get_session
+        from backend.models.database import Issue as _Issue
+        try:
+            from sqlmodel import Session as _Session
+            from backend.core.deps import engine as _engine
+            with _Session(_engine) as _db:
+                _issue_db = _db.get(_Issue, job["issue_id"])
+                if _issue_db:
+                    _issue_db.worktree_path = job["worktree_path"]
+                    _issue_db.branch_name = wt_branch
+                    _db.add(_issue_db)
+                    _db.commit()
+        except Exception as db_err:
+            # Non-fatal — approve will fall back to convention-based path
+            pass
 
         worktree_path = job["worktree_path"]
         job["status"] = "running"
@@ -217,10 +236,14 @@ async def _run_agent_job(
         tier_models = [m["id"] for m in _MODEL_TIERS.get(model_tier, [])]
         # Ensure primary model is first, then add tier alternatives
         models_to_try = [model] + [m for m in tier_models if m != model]
-        # Cross-tier fallback: always add llama as last resort (reliable + free)
-        fallback_safety = "meta-llama/llama-3.3-70b-instruct:free"
-        if fallback_safety not in models_to_try:
-            models_to_try.append(fallback_safety)
+        # Cross-tier safety nets — ordered by reliability, always appended last
+        for safety in [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "openai/gpt-oss-120b:free",
+            "google/gemini-2.5-flash",   # paid fallback if free tier exhausted
+        ]:
+            if safety not in models_to_try:
+                models_to_try.append(safety)
 
         last_error = None
         for attempt_model in models_to_try:
@@ -241,7 +264,9 @@ async def _run_agent_job(
                     break
                 elif event["type"] == "error":
                     content = event.get("content", "")
-                    if "429" in content or "rate" in content.lower() or "rate-limited" in content.lower():
+                    # Retry on: rate limits (429), spend limits (402), provider errors
+                    if any(code in content for code in ["429", "402", "503", "529"]) or \
+                       any(kw in content.lower() for kw in ["rate", "limit", "exceeded", "overloaded", "upstream"]):
                         rate_limited = True
                     got_error = True
                     last_error = content
@@ -253,15 +278,146 @@ async def _run_agent_job(
                 break
             # Rate limited — try next model
 
-        if job["status"] == "error" and last_error:
-            # already recorded
-            pass
+        # After agent completes successfully: auto-create PR if commits exist
+        if job["status"] == "completed":
+            await _auto_create_pr(job)
 
     except Exception as e:
         job["status"] = "error"
         job["events"].append({
             "type": "error",
             "content": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+
+async def _auto_create_pr(job: dict[str, Any]) -> None:
+    """After agent completes: check if there are commits and auto-create a GitHub PR."""
+    worktree_path = job.get("worktree_path", "")
+    github_full_name = job.get("github_full_name", "")
+    github_token = job.get("github_token", "")
+    issue_dict = job.get("issue_dict", {})
+    issue_id = job.get("issue_id")
+
+    if not worktree_path or not github_full_name:
+        return
+
+    try:
+        # Check if there are any commits ahead of main
+        check_proc = await asyncio.create_subprocess_shell(
+            "git log --oneline origin/main..HEAD 2>/dev/null | wc -l",
+            cwd=worktree_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await check_proc.communicate()
+        commits_ahead = int(stdout.decode().strip() or "0")
+
+        if commits_ahead == 0:
+            job["events"].append({
+                "type": "thought",
+                "content": "⚠️ No commits found — agent did not write any changes. No PR created.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            job["status"] = "review"  # Needs human review
+            return
+
+        # Push the branch
+        job["events"].append({
+            "type": "thought",
+            "content": f"🔀 Pushing branch ({commits_ahead} commit(s))...",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        push_env = {**os.environ}
+        if github_token:
+            push_env["GH_TOKEN"] = github_token
+            # Set push URL with token
+            await asyncio.create_subprocess_shell(
+                f"git remote set-url origin https://x-access-token:{github_token}@github.com/{github_full_name}.git",
+                cwd=worktree_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+
+        push_proc = await asyncio.create_subprocess_shell(
+            "git push -u origin HEAD",
+            cwd=worktree_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, push_err = await push_proc.communicate()
+        if push_proc.returncode != 0:
+            job["events"].append({
+                "type": "error",
+                "content": f"Push failed: {push_err.decode()[:200]}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            return
+
+        # Create PR via gh CLI
+        issue_title = issue_dict.get("title", "Agent fix")
+        issue_number = issue_dict.get("number", "?")
+        branch_proc = await asyncio.create_subprocess_shell(
+            "git branch --show-current",
+            cwd=worktree_path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        branch_stdout, _ = await branch_proc.communicate()
+        branch_name = branch_stdout.decode().strip()
+
+        pr_body = (
+            f"## Auto-generated by Agent Harness\n\n"
+            f"Fixes #{issue_number}: {issue_title}\n\n"
+            f"Agent explored the codebase and implemented the requested changes.\n"
+            f"Please review and approve."
+        )
+
+        pr_proc = await asyncio.create_subprocess_shell(
+            f'gh pr create --title "fix: {issue_title} (#{issue_number})" '
+            f'--body "{pr_body}" --base main --head "{branch_name}" --repo "{github_full_name}"',
+            cwd=worktree_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "GH_TOKEN": github_token} if github_token else None,
+        )
+        pr_stdout, pr_stderr = await pr_proc.communicate()
+        pr_url = pr_stdout.decode().strip()
+
+        if pr_proc.returncode == 0 and pr_url:
+            # Extract PR number from URL
+            pr_number = int(pr_url.rstrip("/").split("/")[-1]) if pr_url else None
+            job["events"].append({
+                "type": "done",
+                "content": f"✅ PR created: {pr_url}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+            # Save PR number + branch to DB
+            if issue_id and pr_number:
+                try:
+                    from sqlmodel import Session as _Session
+                    from backend.core.deps import engine as _engine
+                    from backend.models.database import Issue as _Issue
+                    with _Session(_engine) as _db:
+                        _issue_db = _db.get(_Issue, issue_id)
+                        if _issue_db:
+                            _issue_db.pr_number = pr_number
+                            _issue_db.branch_name = branch_name
+                            _issue_db.status = IssueStatus.review
+                            _db.add(_issue_db)
+                            _db.commit()
+                except Exception:
+                    pass
+        else:
+            err = pr_stderr.decode()[:200]
+            job["events"].append({
+                "type": "error",
+                "content": f"PR creation failed: {err}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+    except Exception as e:
+        job["events"].append({
+            "type": "error",
+            "content": f"Auto-PR error: {e}",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 

@@ -55,6 +55,9 @@ class Issue(SQLModel, table=True):
     repo_id: int = Field(foreign_key="repo.id")
     submitted_by: int = Field(foreign_key="user.id")
     github_issue_number: Optional[int] = None
+    pr_number: Optional[int] = None          # GitHub PR number (may differ from issue number)
+    worktree_path: Optional[str] = None      # Absolute path to git worktree on disk
+    branch_name: Optional[str] = None        # e.g. "feature/issue-5"
     status: IssueStatus = Field(default=IssueStatus.open)
     model_tier: str = Field(default="balanced")
     title: str = Field(default="")
@@ -100,4 +103,13 @@ def run_migrations():
             conn.commit()
         if 'title' not in issue_cols:
             conn.execute(text("ALTER TABLE issue ADD COLUMN title TEXT"))
+            conn.commit()
+        if 'pr_number' not in issue_cols:
+            conn.execute(text("ALTER TABLE issue ADD COLUMN pr_number INTEGER"))
+            conn.commit()
+        if 'worktree_path' not in issue_cols:
+            conn.execute(text("ALTER TABLE issue ADD COLUMN worktree_path TEXT"))
+            conn.commit()
+        if 'branch_name' not in issue_cols:
+            conn.execute(text("ALTER TABLE issue ADD COLUMN branch_name TEXT"))
             conn.commit()

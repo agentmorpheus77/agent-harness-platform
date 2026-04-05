@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 
 import httpx
@@ -18,6 +19,8 @@ class IssueResponse(BaseModel):
     repo_id: int
     submitted_by: int
     github_issue_number: Optional[int]
+    pr_number: Optional[int] = None
+    branch_name: Optional[str] = None
     status: str
     model_tier: str
     title: str
@@ -67,6 +70,8 @@ def list_issues(
             repo_id=i.repo_id,
             submitted_by=i.submitted_by,
             github_issue_number=i.github_issue_number,
+            pr_number=i.pr_number,
+            branch_name=i.branch_name,
             status=i.status.value,
             model_tier=i.model_tier,
             title=i.title,
@@ -185,8 +190,10 @@ def approve_issue(
     if not workspace or workspace.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not issue.github_issue_number:
-        raise HTTPException(status_code=400, detail="Issue has no GitHub PR number")
+    # Determine PR number: prefer stored pr_number, fall back to github_issue_number
+    pr_number = issue.pr_number or issue.github_issue_number
+    if not pr_number:
+        raise HTTPException(status_code=400, detail="Issue has no associated PR number. Run the agent first.")
 
     # Get GitHub token
     setting = session.exec(
@@ -194,15 +201,24 @@ def approve_issue(
     ).first()
     github_token = decrypt_value(setting.value_encrypted) if setting else None
 
-    # Merge
-    branch_name = f"feature/issue-{issue.github_issue_number}"
-    # Use absolute path: worktrees live next to the repo clone
-    repo_local_path = f"/tmp/agent-harness/repos/{repo.github_full_name.replace('/', '_')}"
-    worktree_path = f"/tmp/agent-harness/repos/worktrees/issue-{issue.github_issue_number}"
+    # Resolve worktree path: prefer stored path, fall back to convention
+    repo_base = f"/tmp/agent-harness/repos/{repo.github_full_name.replace('/', '_')}"
+    if issue.worktree_path and os.path.exists(issue.worktree_path):
+        worktree_path = issue.worktree_path
+    else:
+        # Convention fallback: try multiple possible paths
+        candidates = [
+            f"/tmp/agent-harness/repos/worktrees/issue-{issue.github_issue_number}",
+            f"/tmp/agent-harness/repos/worktrees/issue-{pr_number}",
+            repo_base,
+        ]
+        worktree_path = next((p for p in candidates if p and os.path.exists(p)), repo_base)
+
+    branch_name = issue.branch_name or f"feature/issue-{issue.github_issue_number}"
 
     result = approve_and_merge(
         repo_full_name=repo.github_full_name,
-        pr_number=issue.github_issue_number,
+        pr_number=pr_number,
         worktree_path=worktree_path,
         branch_name=branch_name,
         github_token=github_token,
