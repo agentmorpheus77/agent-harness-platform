@@ -25,7 +25,7 @@ def _auto_seed():
     """Auto-seed admin user + API keys from environment variables on first boot."""
     import os, logging
     from backend.models.database import User, UserRole, Workspace, Repo, Setting
-    from backend.core.security import get_password_hash
+    from backend.core.security import hash_password as get_password_hash
     from backend.core.encryption import encrypt_value
     from sqlmodel import Session, select
 
