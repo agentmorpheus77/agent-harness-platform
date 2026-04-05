@@ -196,7 +196,9 @@ def approve_issue(
 
     # Merge
     branch_name = f"feature/issue-{issue.github_issue_number}"
-    worktree_path = f"../worktrees/issue-{issue.github_issue_number}"
+    # Use absolute path: worktrees live next to the repo clone
+    repo_local_path = f"/tmp/agent-harness/repos/{repo.github_full_name.replace('/', '_')}"
+    worktree_path = f"/tmp/agent-harness/repos/worktrees/issue-{issue.github_issue_number}"
 
     result = approve_and_merge(
         repo_full_name=repo.github_full_name,

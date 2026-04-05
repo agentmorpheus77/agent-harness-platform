@@ -122,6 +122,7 @@ async def start_agent(
         "id": job_id,
         "issue_id": issue.id,
         "model": model,
+        "model_tier": body.model_tier,
         "status": "starting",
         "events": [],
         "worktree_path": "",
@@ -210,12 +211,51 @@ async def _run_agent_job(
         worktree_path = job["worktree_path"]
         job["status"] = "running"
 
-        async for event in run_agent_loop(api_key, model, issue_dict, worktree_path):
-            job["events"].append(event)
-            if event["type"] == "done":
-                job["status"] = "completed"
-            elif event["type"] == "error":
-                job["status"] = "error"
+        # Build model fallback list: primary model + tier fallbacks
+        model_tier = job.get("model_tier", "free")
+        from backend.core.llm_client import MODEL_TIERS as _MODEL_TIERS
+        tier_models = [m["id"] for m in _MODEL_TIERS.get(model_tier, [])]
+        # Ensure primary model is first, then add tier alternatives
+        models_to_try = [model] + [m for m in tier_models if m != model]
+        # Cross-tier fallback: always add llama as last resort (reliable + free)
+        fallback_safety = "meta-llama/llama-3.3-70b-instruct:free"
+        if fallback_safety not in models_to_try:
+            models_to_try.append(fallback_safety)
+
+        last_error = None
+        for attempt_model in models_to_try:
+            if attempt_model != model:
+                job["events"].append({
+                    "type": "thought",
+                    "content": f"⚡ Retrying with fallback model: {attempt_model}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+            job["model"] = attempt_model
+            got_error = False
+            rate_limited = False
+
+            async for event in run_agent_loop(api_key, attempt_model, issue_dict, worktree_path):
+                job["events"].append(event)
+                if event["type"] == "done":
+                    job["status"] = "completed"
+                    break
+                elif event["type"] == "error":
+                    content = event.get("content", "")
+                    if "429" in content or "rate" in content.lower() or "rate-limited" in content.lower():
+                        rate_limited = True
+                    got_error = True
+                    last_error = content
+                    job["status"] = "error"
+                    break
+
+            if not got_error or not rate_limited:
+                # Either success, or a non-rate-limit error — don't retry
+                break
+            # Rate limited — try next model
+
+        if job["status"] == "error" and last_error:
+            # already recorded
+            pass
 
     except Exception as e:
         job["status"] = "error"
