@@ -10,18 +10,82 @@ import httpx
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 MODEL_TIERS = {
+    # All models verified to support tool/function calling via OpenRouter API (2026-04)
     "free": [
-        # These models support tool/function calling via OpenRouter
-        {"id": "google/gemini-2.0-flash-exp:free", "name": "Gemini 2.0 Flash Exp (Free)", "cost": "$0"},
-        {"id": "mistralai/mistral-small-3.1-24b-instruct:free", "name": "Mistral Small 3.1 24B (Free)", "cost": "$0"},
+        {
+            "id": "qwen/qwen3-coder:free",
+            "name": "Qwen3 Coder 480B (Free)",
+            "cost": "$0",
+            "context": 262000,
+            "note": "Best free coding model, 480B MoE",
+        },
+        {
+            "id": "meta-llama/llama-3.3-70b-instruct:free",
+            "name": "Llama 3.3 70B (Free)",
+            "cost": "$0",
+            "context": 65536,
+            "note": "Reliable, widely supported",
+        },
+        {
+            "id": "openai/gpt-oss-120b:free",
+            "name": "OpenAI OSS 120B (Free)",
+            "cost": "$0",
+            "context": 131072,
+            "note": "OpenAI open-source 120B",
+        },
     ],
     "balanced": [
-        {"id": "qwen/qwen-2.5-coder-32b-instruct", "name": "Qwen 2.5 Coder 32B", "cost": "~$0.20/M"},
-        {"id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash", "cost": "~$0.15/M"},
+        {
+            "id": "deepseek/deepseek-v3.2",
+            "name": "DeepSeek V3.2",
+            "cost": "~$0.26/M in + $0.38/M out",
+            "context": 163840,
+            "note": "Best value coding model",
+        },
+        {
+            "id": "meta-llama/llama-4-maverick",
+            "name": "Llama 4 Maverick",
+            "cost": "~$0.15/M in + $0.60/M out",
+            "context": 1048576,
+            "note": "1M context, great price/performance",
+        },
+        {
+            "id": "mistralai/devstral-2512",
+            "name": "Devstral (Mistral)",
+            "cost": "~$0.40/M in + $2.00/M out",
+            "context": 262144,
+            "note": "Coding-specialist model by Mistral",
+        },
+        {
+            "id": "google/gemini-3.1-flash-lite-preview",
+            "name": "Gemini 3.1 Flash Lite",
+            "cost": "~$0.25/M in + $1.50/M out",
+            "context": 1048576,
+            "note": "Fast, cheap, 1M context",
+        },
     ],
     "premium": [
-        {"id": "anthropic/claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "cost": "~$3/M in + $15/M out"},
-        {"id": "google/gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro", "cost": "~$1.25/M"},
+        {
+            "id": "anthropic/claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6",
+            "cost": "~$3/M in + $15/M out",
+            "context": 1000000,
+            "note": "Best overall coding quality",
+        },
+        {
+            "id": "google/gemini-3.1-pro-preview",
+            "name": "Gemini 3.1 Pro",
+            "cost": "~$2/M in + $12/M out",
+            "context": 1048576,
+            "note": "Strong reasoning, 1M context",
+        },
+        {
+            "id": "openai/gpt-4.1",
+            "name": "GPT-4.1",
+            "cost": "~$2/M in + $8/M out",
+            "context": 1047576,
+            "note": "OpenAI flagship, excellent tools support",
+        },
     ],
 }
 
