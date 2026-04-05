@@ -46,6 +46,7 @@ export function IssuesPage() {
   const [activeJobs, setActiveJobs] = useState<Record<number, string>>({})
   const [expandedOutputs, setExpandedOutputs] = useState<Record<number, boolean>>({})
   const [resetting, setResetting] = useState<Record<number, boolean>>({})
+  const [starting, setStarting] = useState<Record<number, boolean>>({})
 
   // Load issues and restore job IDs from localStorage
   useEffect(() => {
@@ -71,6 +72,9 @@ export function IssuesPage() {
   }, [selectedRepoId])
 
   const handleStartAgent = async (issue: Issue) => {
+    // Prevent double-clicks
+    if (starting[issue.id]) return
+    setStarting((prev) => ({ ...prev, [issue.id]: true }))
     try {
       const result = await api.startAgent(issue.id, issue.model_tier || 'free')
       storeJobId(issue.id, result.job_id)
@@ -81,6 +85,12 @@ export function IssuesPage() {
       )
     } catch (e) {
       console.error('Failed to start agent:', e)
+    } finally {
+      setStarting((prev) => {
+        const next = { ...prev }
+        delete next[issue.id]
+        return next
+      })
     }
   }
 
@@ -171,7 +181,11 @@ export function IssuesPage() {
                           size="sm"
                           variant="default"
                           onClick={() => handleStartAgent(issue)}
+                          disabled={!!starting[issue.id]}
                         >
+                          {starting[issue.id] ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : null}
                           {t('agent.start')}
                         </Button>
                       )}
