@@ -11,11 +11,13 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 MODEL_TIERS = {
     "free": [
-        {"id": "google/gemma-4-26b-a4b-it", "name": "Gemma 4 26B (Free)", "cost": "$0"},
-        {"id": "qwen/qwen3.6-plus:free", "name": "Qwen 3.6 Plus (Free)", "cost": "$0"},
+        # These models support tool/function calling via OpenRouter
+        {"id": "google/gemini-2.0-flash-exp:free", "name": "Gemini 2.0 Flash Exp (Free)", "cost": "$0"},
+        {"id": "mistralai/mistral-small-3.1-24b-instruct:free", "name": "Mistral Small 3.1 24B (Free)", "cost": "$0"},
     ],
     "balanced": [
         {"id": "qwen/qwen-2.5-coder-32b-instruct", "name": "Qwen 2.5 Coder 32B", "cost": "~$0.20/M"},
+        {"id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash", "cost": "~$0.15/M"},
     ],
     "premium": [
         {"id": "anthropic/claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "cost": "~$3/M in + $15/M out"},
@@ -61,6 +63,8 @@ async def stream_chat_completion(
     }
     if tools:
         payload["tools"] = tools
+        # Tell OpenRouter to only route to providers that support tool use
+        payload["provider"] = {"require_parameters": True}
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
         try:
@@ -140,6 +144,7 @@ async def chat_completion(
     }
     if tools:
         payload["tools"] = tools
+        payload["provider"] = {"require_parameters": True}
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
         response = await client.post(
