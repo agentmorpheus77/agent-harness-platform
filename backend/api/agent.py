@@ -18,6 +18,7 @@ from backend.core.agent import run_agent_loop
 from backend.core.complexity import estimate_complexity
 from backend.core.deps import get_current_user, get_session
 from backend.core.encryption import decrypt_value
+from backend.core.preview import PreviewServer, run_smoke_tests, start_preview, stop_preview
 from backend.core.llm_client import MODEL_TIERS, get_default_model
 from backend.core.worktree import WorktreeInfo, cleanup_worktree, create_worktree
 from backend.models.database import Issue, IssueStatus, Repo, Setting, User
@@ -385,10 +386,11 @@ async def _auto_create_pr(job: dict[str, Any]) -> None:
             # Extract PR number from URL
             pr_number = int(pr_url.rstrip("/").split("/")[-1]) if pr_url else None
             job["events"].append({
-                "type": "done",
+                "type": "thought",
                 "content": f"✅ PR created: {pr_url}",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
+            job["pr_url"] = pr_url
 
             # Save PR number + branch to DB
             if issue_id and pr_number:
@@ -406,6 +408,10 @@ async def _auto_create_pr(job: dict[str, Any]) -> None:
                             _db.commit()
                 except Exception:
                     pass
+
+            # Step 3: Start preview server and run smoke tests
+            await _preview_and_test(job, worktree_path, github_full_name, github_token, pr_number)
+
         else:
             err = pr_stderr.decode()[:200]
             job["events"].append({
@@ -420,6 +426,133 @@ async def _auto_create_pr(job: dict[str, Any]) -> None:
             "content": f"Auto-PR error: {e}",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
+
+
+async def _preview_and_test(
+    job: dict[str, Any],
+    worktree_path: str,
+    github_full_name: str,
+    github_token: str,
+    pr_number: int,
+) -> None:
+    """Start a preview server for the worktree, run smoke tests, auto-merge on pass."""
+    issue_id = job.get("issue_id")
+
+    # ── 1. Start preview server ─────────────────────────────────────────────
+    job["events"].append({
+        "type": "thought",
+        "content": "🚀 Starting preview server to test changes...",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+    server: PreviewServer | None = None
+    try:
+        server = await asyncio.wait_for(
+            start_preview(worktree_path, timeout=90),
+            timeout=100,
+        )
+        preview_url = server.url
+        job["preview_url"] = preview_url
+        job["events"].append({
+            "type": "tool_result",
+            "content": f"🌐 Preview live: {preview_url}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+        # ── 2. Smoke tests ───────────────────────────────────────────────────
+        job["events"].append({
+            "type": "thought",
+            "content": f"🧪 Running smoke tests on {preview_url}...",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+        test_result = await run_smoke_tests(preview_url)
+        passed = test_result["passed"]
+
+        for r in test_result["results"]:
+            icon = "✅" if r["passed"] else "❌"
+            job["events"].append({
+                "type": "tool_result",
+                "content": f"{icon} [{r['test']}] {r['detail']}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # ── 3. Auto-merge if all tests passed ────────────────────────────────
+        if passed:
+            job["events"].append({
+                "type": "thought",
+                "content": "✅ All tests passed — auto-merging PR...",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+            env_gh = {**os.environ, "GH_TOKEN": github_token} if github_token else None
+            merge_proc = await asyncio.create_subprocess_shell(
+                f"gh pr merge {pr_number} --squash --delete-branch --repo {github_full_name}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env_gh,
+            )
+            m_out, m_err = await asyncio.wait_for(merge_proc.communicate(), timeout=30)
+            merge_ok = merge_proc.returncode == 0
+
+            if merge_ok:
+                job["events"].append({
+                    "type": "done",
+                    "content": f"🎉 Merged! PR #{pr_number} → main. Preview was: {preview_url}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                job["status"] = "merged"
+
+                # Update DB status
+                if issue_id:
+                    try:
+                        from sqlmodel import Session as _Session
+                        from backend.core.deps import engine as _engine
+                        from backend.models.database import Issue as _Issue, IssueStatus as _IS
+                        with _Session(_engine) as _db:
+                            _issue_db = _db.get(_Issue, issue_id)
+                            if _issue_db:
+                                _issue_db.status = _IS.merged
+                                _db.add(_issue_db)
+                                _db.commit()
+                    except Exception:
+                        pass
+            else:
+                err_msg = m_err.decode()[:200]
+                job["events"].append({
+                    "type": "error",
+                    "content": f"Auto-merge failed: {err_msg}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+        else:
+            job["events"].append({
+                "type": "thought",
+                "content": f"⚠️ Some tests failed — PR #{pr_number} left for manual review at {job.get('pr_url','')}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+    except asyncio.TimeoutError:
+        job["events"].append({
+            "type": "thought",
+            "content": "⚠️ Preview server timed out — skipping smoke tests. PR left open for manual review.",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        job["events"].append({
+            "type": "thought",
+            "content": f"⚠️ Preview/test error: {e} — PR left open for manual review.",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    finally:
+        # Always stop the preview server
+        if server:
+            await stop_preview(server)
+            job["events"].append({
+                "type": "thought",
+                "content": "🛑 Preview server stopped.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
 
 
 @router.get("/{job_id}/stream")
@@ -444,7 +577,7 @@ async def stream_agent_output(job_id: str):
                     return
                 last_index += 1
 
-            if job["status"] in ("completed", "error"):
+            if job["status"] in ("completed", "error", "merged", "review"):
                 return
 
             await asyncio.sleep(0.3)
@@ -472,6 +605,9 @@ async def get_job_status(job_id: str):
         "model": job["model"],
         "event_count": len(job["events"]),
         "created_at": job["created_at"],
+        "pr_url": job.get("pr_url"),
+        "preview_url": job.get("preview_url"),
+        "worktree_path": job.get("worktree_path"),
     }
 
 
