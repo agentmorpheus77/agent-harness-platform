@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Eye, GitPullRequest } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 interface AgentEvent {
   type: 'thought' | 'tool_call' | 'tool_result' | 'error' | 'done'
@@ -12,7 +13,7 @@ interface AgentEvent {
 
 interface AgentOutputProps {
   jobId: string
-  onDone?: () => void
+  onDone?: (jobId?: string, previewUrl?: string, prUrl?: string) => void
   defaultCollapsed?: boolean
 }
 
@@ -38,6 +39,8 @@ export function AgentOutput({ jobId, onDone, defaultCollapsed = false }: AgentOu
   const [connected, setConnected] = useState(false)
   const [finished, setFinished] = useState(false)
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [prUrl, setPrUrl] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,7 +58,17 @@ export function AgentOutput({ jobId, onDone, defaultCollapsed = false }: AgentOu
           setFinished(true)
           setConnected(false)
           eventSource.close()
-          onDone?.()
+          // Poll job status for preview/pr URLs
+          fetch(`/api/agent/${jobId}/status`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          })
+            .then((r) => r.json())
+            .then((status) => {
+              if (status.preview_url) setPreviewUrl(status.preview_url)
+              if (status.pr_url) setPrUrl(status.pr_url)
+              onDone?.(jobId, status.preview_url, status.pr_url)
+            })
+            .catch(() => onDone?.(jobId))
         }
       } catch {
         // ignore parse errors
@@ -98,6 +111,22 @@ export function AgentOutput({ jobId, onDone, defaultCollapsed = false }: AgentOu
               <Badge variant={events.some(e => e.type === 'error') ? 'destructive' : 'secondary'}>
                 {events.some(e => e.type === 'error') ? t('agent.failed') : t('agent.completed')}
               </Badge>
+            )}
+            {prUrl && (
+              <a href={prUrl} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="outline" className="h-6 text-xs px-2">
+                  <GitPullRequest className="h-3 w-3 mr-1" /> PR
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </Button>
+              </a>
+            )}
+            {previewUrl && (
+              <a href={previewUrl} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="outline" className="h-6 text-xs px-2 text-purple-600 border-purple-400">
+                  <Eye className="h-3 w-3 mr-1" /> Preview
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </Button>
+              </a>
             )}
             {events.length > 0 && (
               <span className="text-xs text-muted-foreground">{events.length} events</span>
