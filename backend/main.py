@@ -21,6 +21,68 @@ from backend.core.encryption import encrypt_value
 from backend.models.database import Setting
 
 
+def _auto_seed():
+    """Auto-seed admin user + API keys from environment variables on first boot."""
+    import os, logging
+    from backend.models.database import User, UserRole, Workspace, Repo, Setting
+    from backend.core.security import get_password_hash
+    from backend.core.encryption import encrypt_value
+    from sqlmodel import Session, select
+
+    admin_email = os.getenv("ADMIN_EMAIL", "chris@cdbrain.de")
+    admin_password = os.getenv("ADMIN_PASSWORD", "fooLeon2026!")
+    admin_username = os.getenv("ADMIN_USERNAME", "chris")
+
+    keys_to_seed = {
+        "openrouter_api_key": os.getenv("OPENROUTER_API_KEY", "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"),
+        "github_token":       os.getenv("GITHUB_TOKEN", ""),
+        "railway_token":      os.getenv("RAILWAY_TOKEN", "c739161c-260b-4fca-9243-bf647f2036f1"),
+    }
+    default_repo = os.getenv("DEFAULT_REPO", "agentmorpheus77/agent-harness-platform")
+
+    try:
+        with Session(engine) as session:
+            # Create admin user if not exists
+            user = session.exec(select(User).where(User.email == admin_email)).first()
+            if not user:
+                user = User(
+                    email=admin_email,
+                    hashed_password=get_password_hash(admin_password),
+                    role=UserRole.admin,
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+                logging.info(f"Auto-seeded admin user: {admin_email}")
+
+                # Create workspace
+                ws = Workspace(owner_id=user.id, name="Default")
+                session.add(ws)
+                session.commit()
+                session.refresh(ws)
+
+                # Create default repo
+                if default_repo:
+                    repo = Repo(workspace_id=ws.id, github_full_name=default_repo, deploy_provider="railway")
+                    session.add(repo)
+                    session.commit()
+                    logging.info(f"Auto-seeded repo: {default_repo}")
+
+            # Seed API keys
+            for key, value in keys_to_seed.items():
+                if not value:
+                    continue
+                existing = session.exec(
+                    select(Setting).where(Setting.user_id == user.id, Setting.key == key)
+                ).first()
+                if not existing:
+                    session.add(Setting(user_id=user.id, key=key, value_encrypted=encrypt_value(value)))
+                    logging.info(f"Auto-seeded setting: {key}")
+            session.commit()
+    except Exception as e:
+        logging.warning(f"Auto-seed failed (non-fatal): {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     SQLModel.metadata.create_all(engine)
@@ -30,6 +92,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         import logging
         logging.warning(f"Migration skipped (DB not ready): {e}")
+    _auto_seed()
     yield
 
 
